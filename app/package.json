@@ -19,7 +19,8 @@
     "appId": "dev.clodoan.typecase",
     "productName": "Typecase",
     "directories": { "output": "dist" },
-    "files": ["main.mjs", "preload.cjs", "renderer/**", "../scripts/lib/**"],
+    "files": ["main.mjs", "preload.cjs", "renderer/**"],
+    "extraResources": [{ "from": "../scripts/lib", "to": "lib" }],
     "mac": {
       "target": "dir",
       "category": "public.app-category.developer-tools",

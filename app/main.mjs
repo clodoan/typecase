@@ -9,10 +9,17 @@ import { app, BrowserWindow, ipcMain, shell, nativeTheme } from "electron";
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, watch } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { discover } from "../scripts/lib/discover.mjs";
-import { readLock, diffAgainstLock, LOCKFILE, CHANGELOG } from "../scripts/lib/lockfile.mjs";
+// The parser library lives in ../scripts/lib in the repo (single source of
+// truth with the CLI). electron-builder can't pack files above the app root,
+// so the packaged app carries a copy under Contents/Resources/lib
+// (extraResources in package.json) and resolves it from there.
+const libURL = app.isPackaged
+  ? pathToFileURL(path.join(process.resourcesPath, "lib") + path.sep)
+  : new URL("../scripts/lib/", import.meta.url);
+const { discover } = await import(new URL("discover.mjs", libURL).href);
+const { readLock, diffAgainstLock, LOCKFILE, CHANGELOG } = await import(new URL("lockfile.mjs", libURL).href);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workdir = process.env.TYPECASE_CWD ?? process.cwd();
