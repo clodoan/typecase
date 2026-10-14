@@ -57,12 +57,6 @@ const esc = (s) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const keyOf = (s) => `${s.tool}:${s.scope}:${s.name}:${s.path}`;
 const lockKeyOf = (s) => `${s.tool}:${s.scope}:${s.name}`; // matches lockfile.mjs keyOf
-const prefersReduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-function transition(fn) {
-  if (!prefersReduced && document.startViewTransition) document.startViewTransition(fn);
-  else fn();
-}
 
 const darkMQ = matchMedia("(prefers-color-scheme: dark)");
 const THEME_ICONS = {
@@ -235,15 +229,13 @@ $("#sidenav").addEventListener("click", (e) => {
   if (!item) return;
   const [kind, ...restParts] = item.dataset.nav.split(":");
   const id = restParts.join(":");
-  transition(() => {
-    Object.assign(state, { view: "grid", groupKey: null, tab: "rendered", focusIndex: -1 });
-    if (kind === "lib") Object.assign(state, { library: id, tool: null, scope: null, collection: null });
-    else if (kind === "tool") Object.assign(state, { library: "all", tool: id, scope: null, collection: null });
-    else if (kind === "root") Object.assign(state, { library: "all", tool: null, scope: null, collection: id });
-    else if (kind === "scope") Object.assign(state, { library: "all", tool: null, scope: id, collection: null });
-    syncSidebar();
-    renderContent();
-  });
+  Object.assign(state, { view: "grid", groupKey: null, tab: "rendered", focusIndex: -1 });
+  if (kind === "lib") Object.assign(state, { library: id, tool: null, scope: null, collection: null });
+  else if (kind === "tool") Object.assign(state, { library: "all", tool: id, scope: null, collection: null });
+  else if (kind === "root") Object.assign(state, { library: "all", tool: null, scope: null, collection: id });
+  else if (kind === "scope") Object.assign(state, { library: "all", tool: null, scope: id, collection: null });
+  syncSidebar();
+  renderContent();
 });
 
 /* ---------- rows ---------- */
@@ -335,23 +327,18 @@ function renderRows() {
 
 /* ---------- detail ---------- */
 
-function openDetail(key, cardEl) {
-  if (cardEl && !prefersReduced) cardEl.style.viewTransitionName = "hero";
-  transition(() => {
-    state.view = "detail";
-    state.groupKey = key;
-    state.tab = "rendered";
-    state.showFrontmatter = false;
-    renderContent();
-  });
+function openDetail(key) {
+  state.view = "detail";
+  state.groupKey = key;
+  state.tab = "rendered";
+  state.showFrontmatter = false;
+  renderContent();
 }
 
 function closeDetail() {
-  transition(() => {
-    state.view = "grid";
-    state.groupKey = null;
-    renderContent();
-  });
+  state.view = "grid";
+  state.groupKey = null;
+  renderContent();
 }
 
 function row(label, valueHtml, muted = false) {
@@ -371,7 +358,7 @@ function renderDetail() {
       <div class="spacer"></div>
       <button class="icon-btn${state.showFrontmatter ? " active" : ""}" data-action="toggle-fm" title="Raw frontmatter">i</button>
     </div>
-    <div class="detail-hero" style="view-transition-name: hero">${esc(s.name)}</div>
+    <div class="detail-hero">${esc(s.name)}</div>
     <div class="detail-sub">${esc(s.description || "")}</div>
     <div class="detail-badges">${badgesHtml(g)}</div>
     ${state.showFrontmatter ? `<div class="frontmatter-pop">${esc(JSON.stringify(s.frontmatter, null, 2))}</div>` : ""}
@@ -515,7 +502,7 @@ $("#content").addEventListener("click", (e) => {
     return;
   }
   const rowEl = e.target.closest(".skill-row");
-  if (rowEl) openDetail(rowEl.dataset.key, rowEl.querySelector(".r-name"));
+  if (rowEl) openDetail(rowEl.dataset.key);
 });
 
 /* ---------- keyboard ---------- */
@@ -525,7 +512,7 @@ function moveFocus(delta) {
   if (!rows.length) return;
   state.focusIndex = Math.max(0, Math.min(rows.length - 1, (state.focusIndex < 0 ? 0 : state.focusIndex + delta)));
   rows.forEach((r, i) => r.classList.toggle("focused", i === state.focusIndex));
-  rows[state.focusIndex].scrollIntoView({ block: "nearest", behavior: prefersReduced ? "auto" : "smooth" });
+  rows[state.focusIndex].scrollIntoView({ block: "nearest" });
 }
 
 document.addEventListener("keydown", (e) => {
@@ -549,7 +536,7 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); moveFocus(-1); }
   else if (e.key === "Enter" && state.focusIndex >= 0) {
     const rowEl = document.querySelectorAll("#rows .skill-row:not([hidden])")[state.focusIndex];
-    if (rowEl) openDetail(rowEl.dataset.key, rowEl.querySelector(".r-name"));
+    if (rowEl) openDetail(rowEl.dataset.key);
   }
 });
 
