@@ -406,6 +406,13 @@ function renderTabRendered(body, g, s) {
       <button class="mini-btn" data-action="reveal" data-path="${esc(inst.path)}">Reveal in Finder</button>
     </li>`).join("");
 
+  // The full parsed body below the metadata: every section, in order.
+  const sectionsHtml = s.sections.map((sec) => {
+    const h = sec.level > 0 ? `<h4 class="s-h${Math.min(sec.level, 4)}">${esc(sec.heading)}</h4>` : "";
+    const text = sec.text ? `<p>${esc(sec.text)}</p>` : "";
+    return h + text;
+  }).join("");
+
   body.innerHTML = `
     <div class="rows">
       ${row("Triggers", esc(s.triggers) || null)}
@@ -417,7 +424,8 @@ function renderTabRendered(body, g, s) {
       ${(overlapLinks || dupLine) ? row("Overlaps with", `<ul>${dupLine}${overlapLinks}</ul>`) : ""}
       ${row("Version / lock", lockHtml)}
       ${row("Size", `~${s.tokens} tokens · ${s.sections.length} sections`)}
-    </div>`;
+    </div>
+    ${sectionsHtml ? `<div class="body-sections">${sectionsHtml}</div>` : ""}`;
 }
 
 async function renderTabSource(body, s) {

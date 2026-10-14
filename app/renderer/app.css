@@ -290,10 +290,14 @@ body.mac { background: transparent; } /* let window vibrancy show through */
 .empty-hint { color: var(--ink-3); font-size: 12.5px; padding: 18px 0; }
 .empty-hint code { font-family: var(--mono); background: var(--active-row); padding: 1px 5px; border-radius: 4px; }
 
-/* Sections (rendered body) */
-.body-sections { padding-top: 6px; }
-.body-sections h4 { font-size: 13px; font-weight: 650; padding: 14px 0 4px; }
-.body-sections p { font-size: 12.5px; line-height: 1.6; color: var(--ink-2); white-space: pre-wrap; }
+/* Sections (rendered body): the skill's full content below the
+   metadata rows. */
+.body-sections { padding: 20px 0 30px; }
+.body-sections h4 { font-weight: 650; color: var(--ink); }
+.body-sections .s-h1 { font-size: 16px; padding: 18px 0 6px; }
+.body-sections .s-h2 { font-size: 14px; padding: 16px 0 5px; }
+.body-sections .s-h3, .body-sections .s-h4 { font-size: 13px; padding: 13px 0 4px; }
+.body-sections p { font-size: 12.5px; line-height: 1.65; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ---- Bottom floating segmented control ---- */
 .segmented-wrap[hidden] { display: none; }
