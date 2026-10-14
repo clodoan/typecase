@@ -54,6 +54,16 @@ Every path is sourced; the same table lives as a comment in
 Typecase reports them once under the pseudo-tool `shared` instead of
 triple-counting one install.
 
+Two dedupe rules keep the list honest. First, the Cursor plugin cache
+keeps old revisions on disk; Typecase scans only the newest revision of
+each plugin (by directory mtime), so a plugin update doesn't show up as
+two skills. Second, byte-identical installs of the same skill (same name,
+same content hash — e.g. one pack installed for both Claude Code and
+Cursor) collapse into a single entry marked `×N` in `ls` and in the app's
+row list; the detail view still lists every install path. Copies with the
+same name but *different* content stay separate — that's a real conflict,
+and it stays flagged.
+
 Extra locations: drop a `typecase.json` in the working directory or
 `~/.config/typecase/`:
 
@@ -120,9 +130,12 @@ on any failure it falls back to the deterministic text.
 
 `typecase open` launches a Mac-first Electron reader (translucent sidebar
 vibrancy, system font, light and dark themes that follow the system,
-full keyboard navigation, ⌘K search). The design language is paper and
-ink with a single verdigris accent; rubric red is reserved for risky
-flags. It imports the same parser library as the CLI —
+full keyboard navigation, ⌘K search). The palette is neutral macOS gray —
+`#f5f5f7` canvas with white panels in light, near-black in dark — with a
+single verdigris accent; rubric red is reserved for risky flags. Styling
+is [StyleX](https://stylexjs.com) compiled at build time; there are no
+animations or transitions anywhere — every interaction renders
+immediately. It imports the same parser library as the CLI —
 no duplicated parsing logic — and live-reloads when any skill folder
 changes on disk.
 
@@ -133,14 +146,16 @@ changes on disk.
   plugin scope).
 - **Row list** — one compact hairline row per skill: name, one-line
   description, duplicate / overlap / risky / changed badges, tool ·
-  scope, token size. Two densities; arrow-key navigation. The floating
+  scope, token size. Identical installs across tools collapse into one
+  row marked `×N`. Two densities; arrow-key navigation. The floating
   toolbar holds the density toggle, filter chips (risky / overlaps /
   changed), theme toggle (system / light / dark), and the ⌘K search
   pill.
 - **Detail view** — hairline rows for triggers, when (not) to use, tools
-  it can call with risky flags, files referenced, path (Reveal in
-  Finder / Open in Cursor), overlaps, and lock state; an info button
-  shows raw frontmatter. A floating segmented control switches
+  it can call with risky flags, files referenced, every install path
+  (Reveal in Finder / Open in Cursor), overlaps, and lock state, followed
+  by the skill's full rendered content, section by section; an info
+  button shows raw frontmatter. A floating segmented control switches
   **Rendered / Source / History** — History shows the locked version,
   the since-lock paragraph with a section-level diff, and this skill's
   `TYPECASE.md` entries.
@@ -155,6 +170,10 @@ cd app
 npm install
 npm start                 # or: node ../scripts/typecase.mjs open
 ```
+
+`npm start` builds the renderer first (Rollup + the StyleX plugin →
+`renderer/dist/`); `npm test` and `npm run dist` do the same. To build it
+alone, `npm run build`.
 
 Package an unsigned local Mac `.app` (no notarization; for your own
 machine):
@@ -173,8 +192,8 @@ fresh machine.
 ## Testing
 
 ```bash
-node --test scripts/typecase.test.mjs   # parser + CLI (12 tests)
-cd app && npm install && npx playwright test   # Electron smoke (4 tests)
+node --test scripts/typecase.test.mjs   # parser + CLI (14 tests)
+cd app && npm install && npm test       # Electron smoke (4 tests; builds the renderer first)
 ```
 
 CI runs both; the Electron suite runs under `xvfb-run` on Linux runners.
@@ -188,9 +207,10 @@ CI runs both; the Electron suite runs under `xvfb-run` on Linux runners.
 | [donald-ada/workinggenius](https://github.com/donald-ada/workinggenius) | `3823c44` | 24 skills incl. an `errata` skill (which is why this tool isn't called Errata); 3 overlap pairs flagged |
 | [clodoan/skills](https://github.com/clodoan/skills) | — | chip, scrub, plinth, ramble; `where "animation timing easing jank"` → scrub (score 0.54) |
 
-Side by side that's 61 skills across four tools, with one planted
-cross-tool duplicate (`figma-design-to-code` installed for both Claude
-Code and Cursor) detected as identical copies. `poteto/pstack` was
+Side by side that's 61 installs across four tools, shown as 60 entries:
+the one planted cross-tool duplicate (`figma-design-to-code` installed
+for both Claude Code and Cursor) is detected as identical copies and
+folds into a single `×2` entry. `poteto/pstack` was
 requested as a test pack but isn't publicly available, so the public
 packs above stand in for it.
 
