@@ -18,7 +18,8 @@ export const styles = stylex.create({
   },
   bodyMac: { backgroundColor: "transparent" }, // let window vibrancy show through
 
-  app: { display: "flex", height: "100vh", padding: "10px", gap: "10px", backgroundColor: "transparent" },
+  // 4px window inset keeps the panels concentric with the 16pt window corner.
+  app: { display: "flex", height: "100vh", padding: "4px", gap: "4px", backgroundColor: "transparent" },
 
   /* ---- Sidebar: floating, rounded, translucent inset ---- */
   sidebar: {
@@ -32,26 +33,26 @@ export const styles = stylex.create({
     borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
     overflow: "hidden",
   },
-  sidebarHidden: { width: 0, marginRight: "-10px", opacity: 0, pointerEvents: "none" },
+  sidebarHidden: { width: 0, marginRight: "-4px", opacity: 0, pointerEvents: "none" },
   sidebarDrag: { height: "52px", flex: "none" },
 
-  sidenav: { flex: 1, overflowY: "auto", padding: "0 10px 14px" },
+  sidenav: { flex: 1, overflowY: "auto", padding: "0 3.5px 3.5px" },
   navHeading: {
     fontSize: "10.5px",
     fontWeight: 600,
     letterSpacing: "0.06em",
     textTransform: "uppercase",
     color: vars.ink3,
-    padding: "14px 8px 5px",
+    padding: "14px 14px 5px",
   },
   navItem: {
     display: "flex",
     alignItems: "center",
     gap: "8px",
     width: "100%",
-    padding: "5px 8px",
+    padding: "5px 14px",
     borderStyle: "none", borderWidth: 0,
-    borderRadius: "7px",
+    borderRadius: vars.radiusInset,
     backgroundColor: { default: "transparent", ":hover": vars.hover },
     color: vars.ink,
     fontFamily: "inherit",
@@ -78,82 +79,65 @@ export const styles = stylex.create({
     overflow: "hidden",
     position: "relative",
   },
-  mainDrag: { position: "absolute", top: 0, left: 0, right: 0, height: "14px", zIndex: 5 },
+  // Window padding strip above both panels.
+  appDrag: { position: "fixed", top: 0, left: 0, right: 0, height: "4px", zIndex: 20 },
+  // Covers the band the floating toolbar sits in, down to where content starts.
+  mainDrag: { position: "absolute", top: 0, left: 0, right: 0, height: "54px", zIndex: 5 },
 
-  /* ---- Floating pill toolbar ---- */
+  /* ---- Floating toolbar: 4px inside the panel, controls 4px inside it.
+     Insets are 3.5px because the container's 0.5px hairline border makes up
+     the rest; radii are concentric when outer edges are 4px apart. ---- */
   toolbar: {
     position: "absolute",
-    top: "12px",
-    left: "14px",
-    right: "14px",
+    top: "3.5px",
+    left: "3.5px",
+    right: "3.5px",
     zIndex: 10,
     display: "flex",
     alignItems: "center",
     gap: "6px",
-    padding: "5px 6px",
-    borderRadius: "999px",
+    padding: "3.5px",
+    borderRadius: vars.radiusInset,
     backgroundColor: vars.pill,
     backdropFilter: "blur(20px) saturate(1.2)",
     borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.pillBorder,
     boxShadow: vars.shadow,
   },
-  tbBtn: {
+  // Sidebar hidden on macOS: clear the traffic lights (they end at x≈80).
+  toolbarBesideLights: { paddingLeft: "84px" },
+  /* One control shape for everything in the toolbar: icon buttons, the
+     detail tabs, and the search field all share height, radius, colors. */
+  control: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "28px",
     height: "28px",
     borderStyle: "none", borderWidth: 0,
-    borderRadius: "999px",
+    borderRadius: vars.radiusControl,
     backgroundColor: { default: "transparent", ":hover": vars.hover },
     color: { default: vars.ink2, ":hover": vars.ink },
+    fontFamily: "inherit",
+    fontSize: "12px",
     cursor: "default",
   },
-  tbBtnActive: { backgroundColor: { default: vars.activeRow, ":hover": vars.activeRow }, color: { default: vars.ink, ":hover": vars.ink } },
+  controlIcon: { width: "28px" },
+  controlText: { padding: "0 10px" },
+  // Color only: a weight change would resize the label and shift its neighbors.
+  controlActive: { backgroundColor: { default: vars.activeRow, ":hover": vars.activeRow }, color: { default: vars.ink, ":hover": vars.ink } },
   tbSep: { width: "1px", height: "16px", backgroundColor: vars.hairline, margin: "0 2px" },
-  tbGroup: { display: "flex", gap: "2px" },
+  backGroup: { display: "flex", alignItems: "center", gap: "6px" },
+  // Centered on the toolbar, independent of what sits on either side.
+  tbTabs: { position: "absolute", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "2px" },
   tbSpacer: { flex: 1 },
 
-  chip: {
-    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
-    borderRadius: "999px",
-    padding: "4px 10px",
-    backgroundColor: { default: "transparent", ":hover": vars.hover },
-    color: { default: vars.ink2, ":hover": vars.ink },
-    fontFamily: "inherit",
-    fontSize: "11.5px",
-    cursor: "default",
-  },
-  chipActive: {
-    backgroundColor: { default: vars.accent, ":hover": vars.accent },
-    borderColor: "transparent",
-    color: { default: vars.accentInk, ":hover": vars.accentInk },
-  },
 
-  searchPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
-    borderRadius: "999px",
-    padding: "5px 7px 5px 10px",
-    backgroundColor: { default: "transparent", ":hover": vars.hover },
-    color: { default: vars.ink2, ":hover": vars.ink },
-    fontFamily: "inherit",
-    fontSize: "11.5px",
-    cursor: "default",
-  },
-  searchKbd: {
-    fontFamily: vars.font,
-    fontSize: "10px",
-    color: vars.ink3,
-    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
-    borderRadius: "4px",
-    padding: "1px 4px",
-  },
+  searchPill: { gap: "6px", borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline, fontSize: "11.5px" },
+  // Plain text: a boxed key would need a 0px radius inside the 4px control.
+  searchKbd: { fontFamily: vars.font, fontSize: "10px", color: vars.ink3 },
 
   /* ---- Content ---- */
-  content: { flex: 1, overflowY: "auto", padding: "68px 22px 80px" },
+  // Stable gutter: short tabs (no scrollbar) keep the same column width.
+  content: { flex: 1, overflowY: "auto", scrollbarGutter: "stable", padding: "58px 22px 40px" },
 
   countHead: { display: "flex", alignItems: "baseline", gap: "10px", padding: "6px 2px 16px" },
   countHeadH1: { fontSize: "22px", fontWeight: 700, letterSpacing: "-0.02em", margin: 0 },
@@ -168,7 +152,7 @@ export const styles = stylex.create({
     padding: "9px 10px",
     margin: "0 -10px",
     borderBottomWidth: "0.5px", borderBottomStyle: "solid", borderBottomColor: vars.hairline,
-    borderRadius: "7px",
+    borderRadius: vars.radiusInset,
     outline: "none",
     backgroundColor: { default: null, ":hover": vars.hover, ":focus-visible": vars.activeRow },
   },
@@ -231,19 +215,6 @@ export const styles = stylex.create({
   /* ---- Detail view ---- */
   detail: { maxWidth: "760px", margin: "0 auto" },
   detailTop: { display: "flex", alignItems: "center", gap: "8px", paddingBottom: "6px" },
-  backBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "4px",
-    borderStyle: "none", borderWidth: 0,
-    backgroundColor: { default: "transparent", ":hover": vars.hover },
-    color: { default: vars.ink2, ":hover": vars.ink },
-    fontFamily: "inherit",
-    fontSize: "12px",
-    padding: "5px 8px",
-    borderRadius: "7px",
-    cursor: "default",
-  },
   spacer: { flex: 1 },
   iconBtn: {
     display: "inline-flex",
@@ -375,56 +346,6 @@ export const styles = stylex.create({
   diffLiChanged: { "::before": { backgroundColor: vars.accent } },
   emptyHint: { color: vars.ink3, fontSize: "12.5px", padding: "18px 0" },
 
-  /* Sections (rendered body): the skill's full content below the
-     metadata rows. */
-  bodySections: { padding: "20px 0 30px" },
-  sH: { fontWeight: 650, color: vars.ink, margin: 0 },
-  sH1: { fontSize: "16px", padding: "18px 0 6px" },
-  sH2: { fontSize: "14px", padding: "16px 0 5px" },
-  sH3: { fontSize: "13px", padding: "13px 0 4px" },
-  sP: {
-    fontSize: "12.5px",
-    lineHeight: 1.65,
-    color: vars.ink2,
-    whiteSpace: "pre-wrap",
-    overflowWrap: "anywhere",
-    margin: 0,
-  },
-
-  /* ---- Bottom floating segmented control ---- */
-  segmentedWrap: {
-    position: "absolute",
-    bottom: "16px",
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    display: "flex",
-    justifyContent: "center",
-    pointerEvents: "none",
-  },
-  segmented: {
-    pointerEvents: "auto",
-    display: "flex",
-    gap: "2px",
-    padding: "3px",
-    borderRadius: "999px",
-    backgroundColor: vars.pill,
-    backdropFilter: "blur(20px) saturate(1.2)",
-    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.pillBorder,
-    boxShadow: vars.shadowFloat,
-  },
-  segmentedBtn: {
-    borderStyle: "none", borderWidth: 0,
-    borderRadius: "999px",
-    padding: "6px 16px",
-    backgroundColor: "transparent",
-    color: { default: vars.ink2, ":hover": vars.ink },
-    fontFamily: "inherit",
-    fontSize: "12px",
-    cursor: "default",
-  },
-  segmentedBtnActive: { backgroundColor: vars.activeRow, color: { default: vars.ink, ":hover": vars.ink }, fontWeight: 550 },
-
   /* ---- Command palette ---- */
   paletteBackdrop: {
     position: "fixed",
@@ -441,7 +362,7 @@ export const styles = stylex.create({
     maxHeight: "420px",
     display: "flex",
     flexDirection: "column",
-    borderRadius: "14px",
+    borderRadius: vars.radiusPanel,
     backgroundColor: vars.panel,
     borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
     boxShadow: vars.shadowFloat,
@@ -457,8 +378,8 @@ export const styles = stylex.create({
     padding: "15px 18px",
     borderBottomWidth: "0.5px", borderBottomStyle: "solid", borderBottomColor: vars.hairline,
   },
-  paletteResults: { overflowY: "auto", padding: "6px" },
-  paletteRow: { display: "flex", alignItems: "baseline", gap: "10px", padding: "8px 12px", borderRadius: "8px" },
+  paletteResults: { overflowY: "auto", padding: "3.5px" },
+  paletteRow: { display: "flex", alignItems: "baseline", gap: "10px", padding: "8px 14px", borderRadius: vars.radiusInset },
   paletteRowSelected: { backgroundColor: vars.accent, color: vars.accentInk },
   paletteName: { fontWeight: 600, fontSize: "13px" },
   paletteDesc: {
@@ -472,4 +393,53 @@ export const styles = stylex.create({
   paletteDescSelected: { color: vars.accentInk, opacity: 0.75 },
   paletteTool: { fontSize: "10px", color: vars.ink3 },
   paletteToolSelected: { color: vars.accentInk, opacity: 0.75 },
+});
+
+/* Rendered skill markdown (classes are stamped per token in markdown.mjs). */
+export const md = stylex.create({
+  root: { fontSize: "13.5px", lineHeight: 1.65, color: vars.ink, overflowWrap: "break-word", padding: "24px 0 40px" },
+  block: { marginTop: 0, marginBottom: "12px" },
+  p: {},
+  h: {
+    color: vars.ink,
+    fontWeight: 650,
+    letterSpacing: "-0.01em",
+    lineHeight: 1.3,
+    marginTop: { default: "28px", ":first-child": 0 },
+    marginBottom: "10px",
+    scrollMarginTop: "64px",
+  },
+  h1: { fontSize: "20px", fontWeight: 700, letterSpacing: "-0.02em" },
+  h2: { fontSize: "17px" },
+  h3: { fontSize: "14.5px" },
+  h4: { fontSize: "13.5px", color: vars.ink2 },
+  list: { paddingLeft: "22px" },
+  li: { marginTop: "4px", "::marker": { color: vars.ink3 } },
+  blockquote: {
+    paddingLeft: "14px",
+    borderLeftWidth: "3px", borderLeftStyle: "solid", borderLeftColor: vars.hairline,
+    color: vars.ink2,
+  },
+  pre: {
+    padding: "12px 14px",
+    borderRadius: "8px",
+    backgroundColor: vars.hover,
+    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
+    overflowX: "auto",
+    fontFamily: vars.mono,
+    fontSize: "12px",
+    lineHeight: 1.55,
+  },
+  preCode: { fontFamily: "inherit", fontSize: "inherit", backgroundColor: "transparent", padding: 0, borderRadius: 0, whiteSpace: "pre" },
+  codeInline: { fontFamily: vars.mono, fontSize: "0.86em", backgroundColor: vars.activeRow, padding: "1px 5px", borderRadius: "4px" },
+  table: { display: "block", overflowX: "auto", borderCollapse: "collapse", fontSize: "12.5px" },
+  cell: {
+    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
+    padding: "6px 10px",
+    textAlign: "left",
+    verticalAlign: "top",
+  },
+  th: { fontWeight: 600, backgroundColor: vars.hover },
+  hr: { borderStyle: "none", borderTopWidth: "0.5px", borderTopStyle: "solid", borderTopColor: vars.hairline, margin: "22px 0" },
+  link: { color: vars.accent, cursor: "pointer", textDecoration: { default: "none", ":hover": "underline" } },
 });

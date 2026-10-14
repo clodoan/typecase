@@ -65,9 +65,9 @@ function createWindow() {
     minWidth: 920,
     minHeight: 600,
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#161618" : "#f5f5f7",
+    backgroundColor: windowBackground(),
     titleBarStyle: isMac ? "hiddenInset" : "hidden",
-    trafficLightPosition: { x: 20, y: 18 },
+    trafficLightPosition: { x: 20, y: 19 }, // centered on the toolbar row
     ...(isMac ? { vibrancy: "sidebar", visualEffectState: "active" } : {}),
     webPreferences: {
       preload: path.join(here, "preload.cjs"),
@@ -76,6 +76,10 @@ function createWindow() {
     },
   });
   win.loadFile(path.join(here, "renderer", "index.html"));
+  // Rendered skill markdown contains links; the window itself never
+  // navigates or opens popups (the renderer routes link clicks over IPC).
+  win.webContents.on("will-navigate", (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.once("ready-to-show", () => win.show());
 }
 
@@ -85,12 +89,24 @@ ipcMain.handle("typecase:data", () => {
   return data;
 });
 
+// The window background and vibrancy follow the native appearance, so
+// the app theme drives it; otherwise light mode shows dark chrome in a dark OS.
+const windowBackground = () => (nativeTheme.shouldUseDarkColors ? "#161618" : "#f5f5f7");
+nativeTheme.on("updated", () => win?.setBackgroundColor(windowBackground()));
+ipcMain.on("typecase:set-theme", (_e, theme) => {
+  if (["system", "light", "dark"].includes(theme)) nativeTheme.themeSource = theme;
+});
+
 ipcMain.handle("typecase:raw", (_e, file) => {
   return readFileSync(file, "utf8");
 });
 
 ipcMain.handle("typecase:reveal", (_e, file) => {
   shell.showItemInFolder(file);
+});
+
+ipcMain.handle("typecase:open-external", (_e, url) => {
+  if (/^(https?|mailto):/i.test(url)) shell.openExternal(url);
 });
 
 ipcMain.handle("typecase:open-editor", (_e, file) => {
@@ -108,5 +124,10 @@ ipcMain.handle("typecase:open-editor", (_e, file) => {
   tryNext(0);
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  // Dev runs get the amber DEV icon so they never pass for the packaged
+  // app in the Dock or app switcher (the packaged icon is build/icon.icns).
+  if (isMac && !app.isPackaged) app.dock.setIcon(path.join(here, "build", "icon-dev.png"));
+  createWindow();
+});
 app.on("window-all-closed", () => app.quit());

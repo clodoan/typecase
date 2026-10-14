@@ -8,7 +8,12 @@ import * as stylex from "@stylexjs/stylex";
 export const vars = stylex.defineVars({
   font: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif',
   mono: '"SF Mono", ui-monospace, Menlo, Consolas, monospace',
-  radiusPanel: "16px",
+  /* Concentric corners: each radius is its container's radius minus the
+     4px inset between them, starting from the native macOS 26 window
+     corner (16pt). window 16 → panel 12 → toolbar / nav item 8 → control 4. */
+  radiusPanel: "12px",
+  radiusInset: "8px",
+  radiusControl: "4px",
 
   canvas: "#f5f5f7",
   panel: "#ffffff",

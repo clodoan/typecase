@@ -148,15 +148,17 @@ changes on disk.
   description, duplicate / overlap / risky / changed badges, tool ·
   scope, token size. Identical installs across tools collapse into one
   row marked `×N`. Two densities; arrow-key navigation. The floating
-  toolbar holds the density toggle, filter chips (risky / overlaps /
-  changed), theme toggle (system / light / dark), and the ⌘K search
-  pill.
+  toolbar holds the sidebar and density toggles, a back chevron and the
+  Rendered / Source / History tabs in the detail view, the theme toggle
+  (system / light / dark), and the ⌘K search pill.
 - **Detail view** — hairline rows for triggers, when (not) to use, tools
   it can call with risky flags, files referenced, every install path
   (Reveal in Finder / Open in Cursor), overlaps, and lock state, followed
-  by the skill's full rendered content, section by section; an info
-  button shows raw frontmatter. A floating segmented control switches
-  **Rendered / Source / History** — History shows the locked version,
+  by the skill's full body rendered as Markdown (markdown-it: headings,
+  lists, code blocks, tables; raw HTML stays escaped, links open in your
+  browser or editor and never navigate the app); an info
+  button shows raw frontmatter. The toolbar tabs switch
+  **Rendered / Source / History** (keys 1–3) — History shows the locked version,
   the since-lock paragraph with a section-level diff, and this skill's
   `TYPECASE.md` entries.
 
@@ -182,6 +184,10 @@ machine):
 cd app
 npm run dist              # electron-builder --mac --dir → dist/mac*/Typecase.app
 ```
+
+The packaged app uses the green icon (`build/icon.icns`); `npm start` runs
+show the amber DEV icon in the Dock so the two never get mixed up. Both
+are drawn in `build/make-icons.mjs`; run `npm run icons` after editing it.
 
 If the app dependencies aren't installed, `typecase open` falls back to
 writing a small self-contained HTML reader to a temp file and opening it

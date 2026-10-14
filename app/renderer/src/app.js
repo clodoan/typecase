@@ -14,6 +14,7 @@
 
 import * as stylex from "@stylexjs/stylex";
 
+import { HEADING_ID_PREFIX, MARKDOWN_ROOT, renderSkillMarkdown } from "./markdown.mjs";
 import { styles } from "./styles.mjs";
 import { darkTheme } from "./themes.mjs";
 
@@ -52,7 +53,6 @@ const C = {
 
   detail: cx(styles.detail),
   detailTop: cx(styles.detailTop),
-  backBtn: cx(styles.backBtn),
   spacer: cx(styles.spacer),
   iconBtn: cx(styles.iconBtn),
   iconBtnActive: cx(styles.iconBtn, styles.iconBtnActive),
@@ -89,12 +89,7 @@ const C = {
   diffLiChanged: cx(styles.diffLi, styles.diffLiChanged),
   emptyHint: cx(styles.emptyHint),
 
-  bodySections: cx(styles.bodySections),
-  sH: [null, cx(styles.sH, styles.sH1), cx(styles.sH, styles.sH2), cx(styles.sH, styles.sH3), cx(styles.sH, styles.sH3)],
-  sP: cx(styles.sP),
 
-  segmentedBtn: cx(styles.segmentedBtn),
-  segmentedBtnActive: cx(styles.segmentedBtn, styles.segmentedBtnActive),
 
   paletteRow: cx(styles.paletteRow),
   paletteRowSelected: cx(styles.paletteRow, styles.paletteRowSelected),
@@ -104,10 +99,10 @@ const C = {
   paletteTool: cx(styles.paletteTool),
   paletteToolSelected: cx(styles.paletteTool, styles.paletteToolSelected),
 
-  tbBtn: cx(styles.tbBtn),
-  tbBtnActive: cx(styles.tbBtn, styles.tbBtnActive),
-  chip: cx(styles.chip),
-  chipActive: cx(styles.chip, styles.chipActive),
+  tbBtn: cx(styles.control, styles.controlIcon),
+  tbBtnActive: cx(styles.control, styles.controlIcon, styles.controlActive),
+  tab: cx(styles.control, styles.controlText),
+  tabActive: cx(styles.control, styles.controlText, styles.controlActive),
 };
 
 const TOOLS = [
@@ -144,7 +139,6 @@ const state = {
   tool: null,
   scope: null,
   collection: null,     // root dir
-  chips: { risky: false, overlaps: false, changed: false },
   density: "cozy",
   theme: localStorage.getItem("typecase-theme") || "system",
   view: "grid",         // grid | detail
@@ -169,24 +163,23 @@ function applyShellStyles() {
   document.body.className = cx(styles.body, isMac && styles.bodyMac);
   $("#app").className = "app " + cx(styles.app);
   $("#sidebar").className = "sidebar " + cx(styles.sidebar, sidebarHidden && styles.sidebarHidden);
+  document.querySelector(".app-drag").className = "app-drag " + cx(styles.appDrag);
   document.querySelector(".sidebar-drag").className = "sidebar-drag " + cx(styles.sidebarDrag);
   $("#sidenav").className = "sidenav " + cx(styles.sidenav);
   $("#main").className = "main " + cx(styles.main);
   $("#main-drag").className = "main-drag " + cx(styles.mainDrag);
-  $("#toolbar").className = "toolbar " + cx(styles.toolbar);
+  syncToolbar();
   $("#toggle-sidebar").className = "tb-btn " + C.tbBtn;
+  $("#back-group").className = "tb-group back-group " + cx(styles.backGroup);
+  $("#back-btn").className = "tb-btn back-btn " + C.tbBtn;
   $("#density-btn").className = "tb-btn " + (state.density === "compact" ? C.tbBtnActive : C.tbBtn);
   $("#theme-btn").className = "tb-btn " + C.tbBtn;
   for (const el of document.querySelectorAll(".tb-sep")) el.className = "tb-sep " + cx(styles.tbSep);
-  $("#chip-group").className = "tb-group chips " + cx(styles.tbGroup);
-  for (const b of document.querySelectorAll(".chip"))
-    b.className = "chip " + (state.chips[b.dataset.chip] ? C.chipActive : C.chip);
   document.querySelector(".tb-spacer").className = "tb-spacer " + cx(styles.tbSpacer);
-  $("#search-pill").className = "search-pill " + cx(styles.searchPill);
+  $("#search-pill").className = "search-pill " + cx(styles.control, styles.controlText, styles.searchPill);
   $("#search-pill kbd").className = cx(styles.searchKbd);
   $("#content").className = "content " + cx(styles.content);
-  $("#segmented-wrap").className = "segmented-wrap " + cx(styles.segmentedWrap);
-  $("#segmented").className = "segmented " + cx(styles.segmented);
+  $("#segmented").className = "tb-tabs " + cx(styles.tbTabs);
   syncSegmented();
   $("#palette-backdrop").className = "palette-backdrop " + cx(styles.paletteBackdrop);
   document.querySelector(".palette").className = "palette " + cx(styles.palette);
@@ -194,9 +187,16 @@ function applyShellStyles() {
   $("#palette-results").className = "palette-results " + cx(styles.paletteResults);
 }
 
+function syncToolbar() {
+  $("#toolbar").className = "toolbar " + cx(styles.toolbar, isMac && sidebarHidden && styles.toolbarBesideLights);
+}
+
 function syncSegmented() {
-  for (const b of document.querySelectorAll("#segmented button"))
-    b.className = b.dataset.tab === state.tab && state.view === "detail" ? "active " + C.segmentedBtnActive : C.segmentedBtn;
+  for (const b of document.querySelectorAll("#segmented button")) {
+    const active = b.dataset.tab === state.tab;
+    b.className = active ? C.tabActive : C.tab;
+    b.setAttribute("aria-selected", String(active));
+  }
 }
 
 const darkMQ = matchMedia("(prefers-color-scheme: dark)");
@@ -214,6 +214,7 @@ function applyTheme() {
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.colorScheme = resolved;
   localStorage.setItem("typecase-theme", state.theme);
+  window.typecase.setTheme(state.theme);
   const btn = $("#theme-btn");
   btn.innerHTML = THEME_ICONS[state.theme];
   btn.title = `Theme: ${state.theme}`;
@@ -282,9 +283,6 @@ function visibleGroups() {
   if (state.tool) out = out.filter((g) => g.tools.includes(state.tool));
   if (state.scope) out = out.filter((g) => g.scopes.includes(state.scope));
   if (state.collection) out = out.filter((g) => g.roots.includes(state.collection));
-  if (state.chips.risky) out = out.filter((g) => g.risky);
-  if (state.chips.overlaps) out = out.filter((g) => g.overlap);
-  if (state.chips.changed) out = out.filter((g) => g.changed);
   return out;
 }
 
@@ -477,7 +475,6 @@ function renderRows() {
 
   const content = $("#content");
   if (wrapEl.parentNode !== content) content.replaceChildren(wrapEl);
-  $("#segmented-wrap").hidden = true;
 }
 
 /* ---------- detail ---------- */
@@ -509,7 +506,6 @@ function renderDetail() {
 
   $("#content").innerHTML = `<div class="detail ${C.detail}">
     <div class="detail-top ${C.detailTop}">
-      <button class="back-btn ${C.backBtn}" data-action="back">‹ Skills</button>
       <div class="${C.spacer}"></div>
       <button class="icon-btn ${state.showFrontmatter ? C.iconBtnActive : C.iconBtn}" data-action="toggle-fm" title="Raw frontmatter">i</button>
     </div>
@@ -519,14 +515,35 @@ function renderDetail() {
     ${state.showFrontmatter ? `<div class="frontmatter-pop ${C.frontmatterPop}">${esc(JSON.stringify(s.frontmatter, null, 2))}</div>` : ""}
     <div id="tab-body"></div>
   </div>`;
+  renderTab();
+}
 
+/* Switching tabs re-renders only #tab-body; the header above stays put. */
+function renderTab() {
+  const g = model.byKey.get(state.groupKey);
+  const s = repFor(g);
   const body = $("#tab-body");
   if (state.tab === "rendered") renderTabRendered(body, g, s);
   else if (state.tab === "source") renderTabSource(body, s);
   else renderTabHistory(body, g, s);
-
-  $("#segmented-wrap").hidden = false;
   syncSegmented();
+}
+
+/* Skill file text, cached per data payload. A cached file fills its tab
+   synchronously, so switching tabs never paints an empty frame. */
+const rawCache = new Map();
+function withRaw(el, s, fill) {
+  if (rawCache.has(s.path)) {
+    fill(rawCache.get(s.path));
+    return;
+  }
+  window.typecase.raw(s.path).then(
+    (raw) => {
+      rawCache.set(s.path, raw);
+      if (el.isConnected) fill(raw);
+    },
+    (e) => { if (el.isConnected) el.textContent = `Could not read ${s.path}: ${e.message}`; },
+  );
 }
 
 function renderTabRendered(body, g, s) {
@@ -559,13 +576,6 @@ function renderTabRendered(body, g, s) {
       <button class="mini-btn ${C.miniBtn}" data-action="reveal" data-path="${esc(inst.path)}">Reveal in Finder</button>
     </li>`).join("");
 
-  // The full parsed body below the metadata: every section, in order.
-  const sectionsHtml = s.sections.map((sec) => {
-    const h = sec.level > 0 ? `<h4 class="${C.sH[Math.min(sec.level, 4)]}">${esc(sec.heading)}</h4>` : "";
-    const text = sec.text ? `<p class="${C.sP}">${esc(sec.text)}</p>` : "";
-    return h + text;
-  }).join("");
-
   const mutedSpan = (t) => `<span class="${C.rowValueMuted}">${t}</span>`;
   body.innerHTML = `
     <div class="rows ${C.rows}">
@@ -579,17 +589,31 @@ function renderTabRendered(body, g, s) {
       ${row("Version / lock", lockHtml)}
       ${row("Size", `~${s.tokens} tokens · ${s.sections.length} sections`)}
     </div>
-    ${sectionsHtml ? `<div class="body-sections ${C.bodySections}">${sectionsHtml}</div>` : ""}`;
+    <article class="body-sections md-body ${MARKDOWN_ROOT}"></article>`;
+  // The skill's full markdown below the metadata, rendered from the file.
+  const article = body.querySelector(".md-body");
+  withRaw(article, s, (raw) => { article.innerHTML = renderSkillMarkdown(raw); });
 }
 
-async function renderTabSource(body, s) {
-  body.innerHTML = `<div class="source-block ${C.sourceBlock}">Loading…</div>`;
-  try {
-    const raw = await window.typecase.raw(s.path);
-    body.querySelector(".source-block").textContent = raw;
-  } catch (e) {
-    body.querySelector(".source-block").textContent = `Could not read ${s.path}: ${e.message}`;
+/** Links in rendered markdown never navigate the window. */
+function openMarkdownLink(href) {
+  if (href.startsWith("#")) {
+    document.getElementById(HEADING_ID_PREFIX + decodeURIComponent(href.slice(1)))?.scrollIntoView({ block: "start" });
+  } else if (/^(https?|mailto):/i.test(href)) {
+    window.typecase.openExternal(href);
+  } else if (!/^[a-z][\w+.-]*:/i.test(href)) {
+    // Relative link: a file shipped next to SKILL.md (references/…).
+    const g = model.byKey.get(state.groupKey);
+    if (!g) return;
+    const url = new URL(href, `file://${repFor(g).dir}/`);
+    window.typecase.openEditor(decodeURIComponent(url.pathname));
   }
+}
+
+function renderTabSource(body, s) {
+  body.innerHTML = `<div class="source-block ${C.sourceBlock}"></div>`;
+  const block = body.firstElementChild;
+  withRaw(block, s, (raw) => { block.textContent = raw; });
 }
 
 function diffItemHtml(c) {
@@ -654,11 +678,16 @@ function renderTabHistory(body, g, s) {
 /* ---------- content: one delegated listener ---------- */
 
 $("#content").addEventListener("click", (e) => {
+  const mdLink = e.target.closest(".md-body a[href]");
+  if (mdLink) {
+    e.preventDefault();
+    openMarkdownLink(mdLink.getAttribute("href"));
+    return;
+  }
   const action = e.target.closest("[data-action]");
   if (action) {
     const kind = action.dataset.action;
-    if (kind === "back") closeDetail();
-    else if (kind === "toggle-fm") { state.showFrontmatter = !state.showFrontmatter; renderContent(); }
+    if (kind === "toggle-fm") { state.showFrontmatter = !state.showFrontmatter; renderContent(); }
     else if (kind === "reveal") window.typecase.reveal(action.dataset.path);
     else if (kind === "editor") window.typecase.openEditor(action.dataset.dir);
     else if (kind === "goto" && action.dataset.key) openDetail(action.dataset.key);
@@ -757,12 +786,13 @@ $("#palette-backdrop").addEventListener("click", (e) => { if (e.target.id === "p
 
 function setTab(tab) {
   state.tab = tab;
-  renderContent();
+  if (state.view === "detail") renderTab();
 }
 
 $("#toggle-sidebar").addEventListener("click", () => {
   sidebarHidden = !sidebarHidden;
   $("#sidebar").className = "sidebar " + cx(styles.sidebar, sidebarHidden && styles.sidebarHidden);
+  syncToolbar();
 });
 $("#density-btn").addEventListener("click", () => {
   state.density = state.density === "cozy" ? "compact" : "cozy";
@@ -775,18 +805,13 @@ $("#density-btn").addEventListener("click", () => {
     }
   }
 });
-for (const b of document.querySelectorAll(".chip"))
-  b.addEventListener("click", () => {
-    state.chips[b.dataset.chip] = !state.chips[b.dataset.chip];
-    b.className = "chip " + (state.chips[b.dataset.chip] ? C.chipActive : C.chip);
-    renderContent();
-  });
 $("#theme-btn").addEventListener("click", () => {
   const order = ["system", "light", "dark"];
   state.theme = order[(order.indexOf(state.theme) + 1) % order.length];
   applyTheme();
 });
 $("#search-pill").addEventListener("click", openPalette);
+$("#back-btn").addEventListener("click", closeDetail);
 for (const b of document.querySelectorAll("#segmented button"))
   b.addEventListener("click", () => setTab(b.dataset.tab));
 
@@ -796,6 +821,7 @@ function renderContent() {
   const t0 = performance.now();
   if (state.view === "detail") renderDetail();
   else renderRows();
+  for (const el of document.querySelectorAll("[data-detail-only]")) el.hidden = state.view !== "detail";
   const stats = (window.__renderStats ??= { count: 0, lastMs: 0 });
   stats.count++;
   stats.lastMs = performance.now() - t0;
@@ -812,6 +838,7 @@ async function load() {
   }
   model = buildModel();
   rowsCache = null;
+  rawCache.clear();
   renderSidebar();
   renderContent();
   const t2 = performance.now();
@@ -822,6 +849,7 @@ window.typecase.onSkillsChanged(async () => {
   data = await window.typecase.data();
   model = buildModel();
   rowsCache = null;
+  rawCache.clear();
   renderSidebar();
   renderContent();
 });

@@ -4,11 +4,17 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* Match the continuous curve macOS uses for the window corner, so nested
+   radii stay concentric with it (Electron-only property). */
+* { -electron-corner-smoothing: system-ui; }
+
 html, body { height: 100%; -webkit-font-smoothing: antialiased; }
 
 [hidden] { display: none !important; }
 
-.sidebar-drag, .main-drag { -webkit-app-region: drag; }
+/* The whole top band drags the window; only the controls inside it opt out. */
+.app-drag, .sidebar-drag, .main-drag, .toolbar { -webkit-app-region: drag; }
+.toolbar button { -webkit-app-region: no-drag; }
 
 code {
   font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
