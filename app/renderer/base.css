@@ -1,0 +1,28 @@
+/* Static globals StyleX cannot own: reset, the hidden attribute,
+   Electron drag regions, scrollbars, and <code> inside generated HTML.
+   Everything themed lives in StyleX (src/tokens.stylex.mjs). */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; -webkit-font-smoothing: antialiased; }
+
+[hidden] { display: none !important; }
+
+.sidebar-drag, .main-drag { -webkit-app-region: drag; }
+
+code {
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  background: rgba(127, 127, 127, 0.14);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.35);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track { background: transparent; }

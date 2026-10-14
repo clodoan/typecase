@@ -6,21 +6,42 @@
   "type": "module",
   "main": "main.mjs",
   "scripts": {
+    "build": "rollup -c",
+    "prestart": "npm run build",
     "start": "electron .",
+    "pretest": "npm run build",
     "test": "playwright test",
+    "predist": "npm run build",
     "dist": "electron-builder --mac --dir"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@stylexjs/rollup-plugin": "^0.19.1",
+    "@stylexjs/stylex": "^0.19.1",
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "rollup": "^4.64.6"
   },
   "build": {
     "appId": "dev.clodoan.typecase",
     "productName": "Typecase",
-    "directories": { "output": "dist" },
-    "files": ["main.mjs", "preload.cjs", "renderer/**"],
-    "extraResources": [{ "from": "../scripts/lib", "to": "lib" }],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.mjs",
+      "preload.cjs",
+      "renderer/index.html",
+      "renderer/base.css",
+      "renderer/dist/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../scripts/lib",
+        "to": "lib"
+      }
+    ],
     "mac": {
       "target": "dir",
       "category": "public.app-category.developer-tools",

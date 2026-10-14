@@ -1,12 +1,114 @@
 /* Typecase renderer. All data comes from the main process over the
    preload bridge; this file is pure presentation + navigation state.
 
+   Styling is StyleX (compiled by rollup into dist/app.css): semantic
+   class names (skill-row, nav-item, …) stay on elements for tests and
+   event delegation, the compiled classes carry all presentation.
+
    Rendering discipline: every derived set (changed keys, overlap paths,
    name collisions, per-group flags, sidebar counts) is computed ONCE
    per data payload into `model`. Lists render as single HTML strings
    with one delegated listener per surface. A state change re-renders
    only the surface it affects; the sidebar is built once per payload
    and only its active highlight is synced afterwards. */
+
+import * as stylex from "@stylexjs/stylex";
+
+import { styles } from "./styles.mjs";
+import { darkTheme } from "./themes.mjs";
+
+const cx = (...xs) => stylex.attrs(...xs).class ?? "";
+
+/* Static class strings, computed once. */
+const C = {
+  navHeading: cx(styles.navHeading),
+  navItem: cx(styles.navItem),
+  navItemActive: cx(styles.navItem, styles.navItemActive),
+  navItemActiveSpecial: cx(styles.navItem, styles.navItemActive, styles.navItemActiveSpecial),
+  navLabel: cx(styles.navLabel),
+  navCount: cx(styles.navCount),
+  navCountActiveSpecial: cx(styles.navCount, styles.navCountActiveSpecial),
+  navIcon: cx(styles.navIcon),
+
+  countHead: cx(styles.countHead),
+  countH1: cx(styles.countHeadH1),
+  countSub: cx(styles.countHeadSub),
+  rowsList: cx(styles.rowsList),
+  skillRow: cx(styles.skillRow),
+  skillRowCompact: cx(styles.skillRow, styles.skillRowCompact),
+  skillRowFocused: cx(styles.skillRow, styles.skillRowFocused),
+  skillRowCompactFocused: cx(styles.skillRow, styles.skillRowCompact, styles.skillRowFocused),
+  rName: cx(styles.rName),
+  rNameCompact: cx(styles.rName, styles.rNameCompact),
+  rDesc: cx(styles.rDesc),
+  rBadges: cx(styles.rBadges),
+  rTool: cx(styles.rTool),
+  rToolIcon: cx(styles.rToolIcon),
+  rTok: cx(styles.rTok),
+
+  badge: cx(styles.badge),
+  badgeRisky: cx(styles.badge, styles.badgeRisky),
+  badgeAccent: cx(styles.badge, styles.badgeAccent),
+
+  detail: cx(styles.detail),
+  detailTop: cx(styles.detailTop),
+  backBtn: cx(styles.backBtn),
+  spacer: cx(styles.spacer),
+  iconBtn: cx(styles.iconBtn),
+  iconBtnActive: cx(styles.iconBtn, styles.iconBtnActive),
+  detailHero: cx(styles.detailHero),
+  detailSub: cx(styles.detailSub),
+  detailBadges: cx(styles.detailBadges),
+  frontmatterPop: cx(styles.frontmatterPop),
+
+  rows: cx(styles.rows),
+  row: cx(styles.row),
+  rowLabel: cx(styles.rowLabel),
+  rowValue: cx(styles.rowValue),
+  rowValueMuted: cx(styles.rowValue, styles.rowValueMuted),
+  valueList: cx(styles.valueList),
+  valueLi: cx(styles.valueLi),
+  mono: cx(styles.mono),
+  monoDim: cx(styles.monoDim),
+  toolChips: cx(styles.toolChips),
+  toolChip: cx(styles.toolChip),
+  toolChipRisky: cx(styles.toolChip, styles.toolChipRisky),
+  pathRow: cx(styles.pathRow),
+  miniBtn: cx(styles.miniBtn),
+  linkSkill: cx(styles.linkSkill),
+
+  sourceBlock: cx(styles.sourceBlock),
+  historyEntry: cx(styles.historyEntry),
+  historyH3: cx(styles.historyH3),
+  historyHash: cx(styles.historyHash),
+  historyPara: cx(styles.historyPara),
+  diffList: cx(styles.diffList),
+  diffLi: cx(styles.diffLi),
+  diffLiAdded: cx(styles.diffLi, styles.diffLiAdded),
+  diffLiRemoved: cx(styles.diffLi, styles.diffLiRemoved),
+  diffLiChanged: cx(styles.diffLi, styles.diffLiChanged),
+  emptyHint: cx(styles.emptyHint),
+
+  bodySections: cx(styles.bodySections),
+  sH: [null, cx(styles.sH, styles.sH1), cx(styles.sH, styles.sH2), cx(styles.sH, styles.sH3), cx(styles.sH, styles.sH3)],
+  sP: cx(styles.sP),
+
+  segmentedBtn: cx(styles.segmentedBtn),
+  segmentedBtnActive: cx(styles.segmentedBtn, styles.segmentedBtnActive),
+
+  paletteRow: cx(styles.paletteRow),
+  paletteRowSelected: cx(styles.paletteRow, styles.paletteRowSelected),
+  paletteName: cx(styles.paletteName),
+  paletteDesc: cx(styles.paletteDesc),
+  paletteDescSelected: cx(styles.paletteDesc, styles.paletteDescSelected),
+  paletteTool: cx(styles.paletteTool),
+  paletteToolSelected: cx(styles.paletteTool, styles.paletteToolSelected),
+
+  tbBtn: cx(styles.tbBtn),
+  tbBtnActive: cx(styles.tbBtn, styles.tbBtnActive),
+  chip: cx(styles.chip),
+  chipActive: cx(styles.chip, styles.chipActive),
+};
 
 const TOOLS = [
   { id: "grok", label: "Grok" },
@@ -22,11 +124,11 @@ const SCOPES = [
 ];
 
 const TOOL_ICONS = {
-  grok: '<svg viewBox="0 0 16 16" width="13" height="13"><path d="M3 13 13 3M9.5 3H13v3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  cursor: '<svg viewBox="0 0 16 16" width="13" height="13"><path d="M4 2.5 12.5 8 8.3 9.1 6.4 13.5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-  claude: '<svg viewBox="0 0 16 16" width="13" height="13"><path d="M8 2v12M3 5l10 6M13 5 3 11" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
-  codex: '<svg viewBox="0 0 16 16" width="13" height="13"><path d="m3 4.5 4 3.5-4 3.5M8.5 12H13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  shared: '<svg viewBox="0 0 16 16" width="13" height="13"><circle cx="5.5" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="10.5" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  grok: '<svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-grok"/></svg>',
+  cursor: '<svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-cursor"/></svg>',
+  claude: '<svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-claude"/></svg>',
+  codex: '<svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-codex"/></svg>',
+  shared: '<svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-shared"/></svg>',
 };
 const LIB_ICONS = {
   all: '<svg viewBox="0 0 16 16" width="13" height="13"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
@@ -58,6 +160,45 @@ const esc = (s) =>
 const keyOf = (s) => `${s.tool}:${s.scope}:${s.name}:${s.path}`;
 const lockKeyOf = (s) => `${s.tool}:${s.scope}:${s.name}`; // matches lockfile.mjs keyOf
 
+/* ---------- shell: StyleX classes onto the static index.html ---------- */
+
+let isMac = false;
+let sidebarHidden = false;
+
+function applyShellStyles() {
+  document.body.className = cx(styles.body, isMac && styles.bodyMac);
+  $("#app").className = "app " + cx(styles.app);
+  $("#sidebar").className = "sidebar " + cx(styles.sidebar, sidebarHidden && styles.sidebarHidden);
+  document.querySelector(".sidebar-drag").className = "sidebar-drag " + cx(styles.sidebarDrag);
+  $("#sidenav").className = "sidenav " + cx(styles.sidenav);
+  $("#main").className = "main " + cx(styles.main);
+  $("#main-drag").className = "main-drag " + cx(styles.mainDrag);
+  $("#toolbar").className = "toolbar " + cx(styles.toolbar);
+  $("#toggle-sidebar").className = "tb-btn " + C.tbBtn;
+  $("#density-btn").className = "tb-btn " + (state.density === "compact" ? C.tbBtnActive : C.tbBtn);
+  $("#theme-btn").className = "tb-btn " + C.tbBtn;
+  for (const el of document.querySelectorAll(".tb-sep")) el.className = "tb-sep " + cx(styles.tbSep);
+  $("#chip-group").className = "tb-group chips " + cx(styles.tbGroup);
+  for (const b of document.querySelectorAll(".chip"))
+    b.className = "chip " + (state.chips[b.dataset.chip] ? C.chipActive : C.chip);
+  document.querySelector(".tb-spacer").className = "tb-spacer " + cx(styles.tbSpacer);
+  $("#search-pill").className = "search-pill " + cx(styles.searchPill);
+  $("#search-pill kbd").className = cx(styles.searchKbd);
+  $("#content").className = "content " + cx(styles.content);
+  $("#segmented-wrap").className = "segmented-wrap " + cx(styles.segmentedWrap);
+  $("#segmented").className = "segmented " + cx(styles.segmented);
+  syncSegmented();
+  $("#palette-backdrop").className = "palette-backdrop " + cx(styles.paletteBackdrop);
+  document.querySelector(".palette").className = "palette " + cx(styles.palette);
+  $("#palette-input").className = cx(styles.paletteInput);
+  $("#palette-results").className = "palette-results " + cx(styles.paletteResults);
+}
+
+function syncSegmented() {
+  for (const b of document.querySelectorAll("#segmented button"))
+    b.className = b.dataset.tab === state.tab && state.view === "detail" ? "active " + C.segmentedBtnActive : C.segmentedBtn;
+}
+
 const darkMQ = matchMedia("(prefers-color-scheme: dark)");
 const THEME_ICONS = {
   system: '<svg viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 2.8v10.4A5.2 5.2 0 0 0 8 2.8Z" fill="currentColor"/></svg>',
@@ -67,7 +208,11 @@ const THEME_ICONS = {
 
 function applyTheme() {
   const resolved = state.theme === "system" ? (darkMQ.matches ? "dark" : "light") : state.theme;
+  // The dark theme is a StyleX createTheme override on the root; light
+  // is the token defaults.
+  document.documentElement.className = cx(styles.html, resolved === "dark" && darkTheme);
   document.documentElement.dataset.theme = resolved;
+  document.documentElement.style.colorScheme = resolved;
   localStorage.setItem("typecase-theme", state.theme);
   const btn = $("#theme-btn");
   btn.innerHTML = THEME_ICONS[state.theme];
@@ -171,14 +316,14 @@ function fuzzyScore(query, s) {
 /* ---------- sidebar: built once per payload, active state synced ---------- */
 
 function navButton({ nav, icon, label, count, special }) {
-  return `<button class="nav-item${special ? " special" : ""}" data-nav="${esc(nav)}">
-    ${icon ?? ""}<span>${esc(label)}</span>${count != null ? `<span class="count">${count}</span>` : ""}
+  return `<button class="nav-item ${C.navItem}" data-nav="${esc(nav)}"${special ? ' data-special="1"' : ""}>
+    <span class="${C.navIcon}">${icon ?? ""}</span><span class="${C.navLabel}">${esc(label)}</span>${count != null ? `<span class="count ${C.navCount}">${count}</span>` : ""}
   </button>`;
 }
 
 function renderSidebar() {
   const { counts } = model;
-  let html = `<div class="nav-heading">Library</div>`;
+  let html = `<div class="nav-heading ${C.navHeading}">Library</div>`;
   const lib = [
     { id: "all", label: "All Skills", count: counts.all },
     { id: "active", label: "Active", count: counts.all },
@@ -189,20 +334,20 @@ function renderSidebar() {
     html += navButton({ nav: `lib:${l.id}`, icon: LIB_ICONS[l.id], label: l.label, count: l.count, special: l.special });
   }
 
-  html += `<div class="nav-heading">Tools</div>`;
+  html += `<div class="nav-heading ${C.navHeading}">Tools</div>`;
   for (const t of TOOLS) {
     const count = counts.tools.get(t.id) ?? 0;
     if (!count && t.id === "shared") continue;
     html += navButton({ nav: `tool:${t.id}`, icon: TOOL_ICONS[t.id], label: t.label, count });
   }
 
-  html += `<div class="nav-heading">Collections</div>`;
+  html += `<div class="nav-heading ${C.navHeading}">Collections</div>`;
   for (const r of data.roots.filter((x) => x.exists && (counts.roots.get(x.dir) ?? 0) > 0)) {
     const short = r.dir.replace(data.cwd, "·").replace(/^\/(home|Users)\/[^/]+/, "~");
     html += navButton({ nav: `root:${r.dir}`, icon: TOOL_ICONS[r.tool] ?? LIB_ICONS.all, label: short, count: counts.roots.get(r.dir) });
   }
 
-  html += `<div class="nav-heading">Sources</div>`;
+  html += `<div class="nav-heading ${C.navHeading}">Sources</div>`;
   for (const sc of SCOPES) {
     html += navButton({ nav: `scope:${sc.id}`, icon: LIB_ICONS.active, label: sc.label, count: counts.scopes.get(sc.id) ?? 0 });
   }
@@ -220,7 +365,10 @@ function syncSidebar() {
     else if (kind === "tool") active = state.tool === id;
     else if (kind === "root") active = state.collection === id;
     else if (kind === "scope") active = state.scope === id;
-    el.classList.toggle("active", active);
+    const special = el.dataset.special === "1";
+    el.className = "nav-item " + (active ? (special ? C.navItemActiveSpecial : C.navItemActive) : C.navItem);
+    const countEl = el.querySelector(".count");
+    if (countEl) countEl.className = "count " + (active && special ? C.navCountActiveSpecial : C.navCount);
   }
 }
 
@@ -244,13 +392,21 @@ function toolLabel(id) { return TOOLS.find((t) => t.id === id)?.label ?? id; }
 
 function badgesHtml(g) {
   const out = [];
-  if (g.copies > 1) out.push(`<span class="badge copies">×${g.copies}</span>`);
-  if (g.risky) out.push('<span class="badge risky">risky</span>');
-  if (g.collision) out.push('<span class="badge dup">dup</span>');
-  else if (g.overlap) out.push('<span class="badge overlap">overlap</span>');
-  if (g.changed) out.push('<span class="badge changed">changed</span>');
+  if (g.copies > 1) out.push(`<span class="badge copies ${C.badge}">×${g.copies}</span>`);
+  if (g.risky) out.push(`<span class="badge risky ${C.badgeRisky}">risky</span>`);
+  if (g.collision) out.push(`<span class="badge dup ${C.badgeAccent}">dup</span>`);
+  else if (g.overlap) out.push(`<span class="badge overlap ${C.badgeAccent}">overlap</span>`);
+  if (g.changed) out.push(`<span class="badge changed ${C.badgeAccent}">changed</span>`);
   return out.join("");
 }
+
+function rowClass(focused) {
+  const compact = state.density === "compact";
+  return "skill-row " + (compact
+    ? (focused ? C.skillRowCompactFocused : C.skillRowCompact)
+    : (focused ? C.skillRowFocused : C.skillRow));
+}
+const rNameClass = () => "r-name " + (state.density === "compact" ? C.rNameCompact : C.rName);
 
 /* Row elements are built ONCE per data payload; filtering and
    navigation toggle visibility on the cached nodes instead of
@@ -263,17 +419,17 @@ function buildRowsCache() {
   let rows = "";
   for (const g of model.groups) {
     const rep = g.rep;
-    rows += `<div class="skill-row" tabindex="0" data-key="${esc(g.key)}">` +
-      `<span class="r-name">${esc(rep.name)}</span>` +
-      `<span class="r-desc">${esc(rep.description || "—")}</span>` +
-      `<span class="r-badges">${badgesHtml(g)}</span>` +
-      `<span class="r-tool"><svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-${esc(rep.tool)}"/></svg><span></span></span>` +
-      `<span class="r-tok">~${rep.tokens}</span></div>`;
+    rows += `<div class="${rowClass(false)}" tabindex="0" data-key="${esc(g.key)}">` +
+      `<span class="${rNameClass()}">${esc(rep.name)}</span>` +
+      `<span class="r-desc ${C.rDesc}">${esc(rep.description || "—")}</span>` +
+      `<span class="r-badges ${C.rBadges}">${badgesHtml(g)}</span>` +
+      `<span class="r-tool ${C.rTool}"><svg class="${C.rToolIcon}" viewBox="0 0 16 16" width="13" height="13"><use href="#ti-${esc(rep.tool)}"/></svg><span></span></span>` +
+      `<span class="r-tok ${C.rTok}">~${rep.tokens}</span></div>`;
   }
   const wrapEl = document.createElement("div");
   wrapEl.innerHTML =
-    `<div class="count-head"><h1></h1><span class="sub"></span></div>` +
-    `<div class="rows-list" id="rows">${rows}<div class="empty-hint" hidden></div></div>`;
+    `<div class="count-head ${C.countHead}"><h1 class="${C.countH1}"></h1><span class="sub ${C.countSub}"></span></div>` +
+    `<div class="rows-list ${C.rowsList}" id="rows">${rows}<div class="empty-hint ${C.emptyHint}" hidden></div></div>`;
   const byKey = new Map();
   for (const el of wrapEl.querySelectorAll(".skill-row")) byKey.set(el.dataset.key, el);
   rowsCache = {
@@ -288,14 +444,14 @@ function buildRowsCache() {
 
 function renderRows() {
   if (!rowsCache) buildRowsCache();
-  const { wrapEl, headEl, subEl, listEl, emptyEl, byKey } = rowsCache;
+  const { wrapEl, headEl, subEl, emptyEl, byKey } = rowsCache;
   const groups = visibleGroups();
   const visible = new Set(groups.map((g) => g.key));
 
   for (const [key, el] of byKey) el.hidden = !visible.has(key);
   for (const g of groups) {
     const el = byKey.get(g.key);
-    el.classList.remove("focused");
+    el.className = rowClass(false);
     const rep = repFor(g);
     const cell = g.tools.length === 1
       ? `${toolLabel(rep.tool)} · ${rep.scope}`
@@ -318,7 +474,6 @@ function renderRows() {
       state.library === "changed" ? "Run <code>typecase lock</code>, edit a skill, and changes will appear." : "Try clearing filters."
     }`;
   }
-  listEl.classList.toggle("compact", state.density === "compact");
 
   const content = $("#content");
   if (wrapEl.parentNode !== content) content.replaceChildren(wrapEl);
@@ -343,7 +498,7 @@ function closeDetail() {
 
 function row(label, valueHtml, muted = false) {
   return valueHtml
-    ? `<div class="row"><div class="label">${esc(label)}</div><div class="value${muted ? " muted" : ""}">${valueHtml}</div></div>`
+    ? `<div class="row ${C.row}"><div class="label ${C.rowLabel}">${esc(label)}</div><div class="value ${muted ? C.rowValueMuted : C.rowValue}">${valueHtml}</div></div>`
     : "";
 }
 
@@ -352,16 +507,16 @@ function renderDetail() {
   if (!g) { closeDetail(); return; }
   const s = repFor(g);
 
-  $("#content").innerHTML = `<div class="detail">
-    <div class="detail-top">
-      <button class="back-btn" data-action="back">‹ Skills</button>
-      <div class="spacer"></div>
-      <button class="icon-btn${state.showFrontmatter ? " active" : ""}" data-action="toggle-fm" title="Raw frontmatter">i</button>
+  $("#content").innerHTML = `<div class="detail ${C.detail}">
+    <div class="detail-top ${C.detailTop}">
+      <button class="back-btn ${C.backBtn}" data-action="back">‹ Skills</button>
+      <div class="${C.spacer}"></div>
+      <button class="icon-btn ${state.showFrontmatter ? C.iconBtnActive : C.iconBtn}" data-action="toggle-fm" title="Raw frontmatter">i</button>
     </div>
-    <div class="detail-hero">${esc(s.name)}</div>
-    <div class="detail-sub">${esc(s.description || "")}</div>
-    <div class="detail-badges">${badgesHtml(g)}</div>
-    ${state.showFrontmatter ? `<div class="frontmatter-pop">${esc(JSON.stringify(s.frontmatter, null, 2))}</div>` : ""}
+    <div class="detail-hero ${C.detailHero}">${esc(s.name)}</div>
+    <div class="detail-sub ${C.detailSub}">${esc(s.description || "")}</div>
+    <div class="detail-badges ${C.detailBadges}">${badgesHtml(g)}</div>
+    ${state.showFrontmatter ? `<div class="frontmatter-pop ${C.frontmatterPop}">${esc(JSON.stringify(s.frontmatter, null, 2))}</div>` : ""}
     <div id="tab-body"></div>
   </div>`;
 
@@ -370,66 +525,65 @@ function renderDetail() {
   else if (state.tab === "source") renderTabSource(body, s);
   else renderTabHistory(body, g, s);
 
-  const seg = $("#segmented-wrap");
-  seg.hidden = false;
-  for (const b of seg.querySelectorAll("button"))
-    b.classList.toggle("active", b.dataset.tab === state.tab);
+  $("#segmented-wrap").hidden = false;
+  syncSegmented();
 }
 
 function renderTabRendered(body, g, s) {
   const whenUse = s.sections.find((x) => /when to use|^use/i.test(x.heading))?.text ?? "";
   const toolChips = s.commands.map((c) => {
     const risky = s.riskyTools.some((r) => c.includes(r) || r.includes(c.split(/\s/)[0]));
-    return `<span class="tool-chip${risky ? " risky" : ""}">${esc(c)}${risky ? " ⚠" : ""}</span>`;
+    return `<span class="${risky ? C.toolChipRisky : C.toolChip}">${esc(c)}${risky ? " ⚠" : ""}</span>`;
   }).join("");
   const riskyOnly = s.riskyTools
     .filter((r) => !s.commands.some((c) => c.includes(r)))
-    .map((r) => `<span class="tool-chip risky">${esc(r)} ⚠</span>`).join("");
+    .map((r) => `<span class="${C.toolChipRisky}">${esc(r)} ⚠</span>`).join("");
   const myOverlaps = g.installs.flatMap((inst) => model.overlapsBySkillPath.get(inst.path) ?? []);
   const overlapLinks = myOverlaps.map((o) => {
     const other = g.installs.some((inst) => inst.path === o.a.path) ? o.b : o.a;
     const otherGroup = model.groups.find((x) => x.installs.some((inst) => inst.path === other.path));
-    return `<li><a class="link-skill" data-action="goto" data-key="${esc(otherGroup?.key ?? "")}">${esc(other.name)}</a> <span class="mono" style="color:var(--ink-3)">(${Math.round(o.score * 100)}% shared vocabulary, ${esc(other.tool)})</span></li>`;
+    return `<li class="${C.valueLi}"><a class="link-skill ${C.linkSkill}" data-action="goto" data-key="${esc(otherGroup?.key ?? "")}">${esc(other.name)}</a> <span class="${C.monoDim}">(${Math.round(o.score * 100)}% shared vocabulary, ${esc(other.tool)})</span></li>`;
   }).join("");
   const collision = data.duplicates.find((d) => !d.identical && d.name === s.name);
   const dupLine = collision
-    ? `<li>Same name, different content in ${collision.installs.filter((i) => i.path !== s.path).map((i) => `${esc(i.tool)} · ${esc(i.scope)}`).join(", ")}</li>`
+    ? `<li class="${C.valueLi}">Same name, different content in ${collision.installs.filter((i) => i.path !== s.path).map((i) => `${esc(i.tool)} · ${esc(i.scope)}`).join(", ")}</li>`
     : "";
 
   const lockEntry = data.lock?.skills?.[lockKeyOf(s)];
   const lockHtml = lockEntry
-    ? `locked <span class="mono">${esc(lockEntry.hash.slice(0, 12))}</span>${lockEntry.hash === s.hash ? " · unchanged" : ` · now <span class="mono">${esc(s.hash.slice(0, 12))}</span> (drifted)`}${lockEntry.source?.kind === "git" ? ` · ${esc(lockEntry.source.remote ?? "git")}@${esc((lockEntry.source.commit ?? "").slice(0, 7))}` : lockEntry.source?.version ? ` · v${esc(lockEntry.source.version)}` : ""}`
+    ? `locked <span class="mono ${C.mono}">${esc(lockEntry.hash.slice(0, 12))}</span>${lockEntry.hash === s.hash ? " · unchanged" : ` · now <span class="mono ${C.mono}">${esc(s.hash.slice(0, 12))}</span> (drifted)`}${lockEntry.source?.kind === "git" ? ` · ${esc(lockEntry.source.remote ?? "git")}@${esc((lockEntry.source.commit ?? "").slice(0, 7))}` : lockEntry.source?.version ? ` · v${esc(lockEntry.source.version)}` : ""}`
     : `not locked — run <code>typecase lock</code>`;
 
   const paths = g.installs.map((inst) => `
-    <li class="path-row"><span class="mono">${esc(inst.path)}</span>
-      <button class="mini-btn" data-action="reveal" data-path="${esc(inst.path)}">Reveal in Finder</button>
+    <li class="${C.pathRow}"><span class="mono ${C.mono}">${esc(inst.path)}</span>
+      <button class="mini-btn ${C.miniBtn}" data-action="reveal" data-path="${esc(inst.path)}">Reveal in Finder</button>
     </li>`).join("");
 
   // The full parsed body below the metadata: every section, in order.
   const sectionsHtml = s.sections.map((sec) => {
-    const h = sec.level > 0 ? `<h4 class="s-h${Math.min(sec.level, 4)}">${esc(sec.heading)}</h4>` : "";
-    const text = sec.text ? `<p>${esc(sec.text)}</p>` : "";
+    const h = sec.level > 0 ? `<h4 class="${C.sH[Math.min(sec.level, 4)]}">${esc(sec.heading)}</h4>` : "";
+    const text = sec.text ? `<p class="${C.sP}">${esc(sec.text)}</p>` : "";
     return h + text;
   }).join("");
 
+  const mutedSpan = (t) => `<span class="${C.rowValueMuted}">${t}</span>`;
   body.innerHTML = `
-    <div class="rows">
+    <div class="rows ${C.rows}">
       ${row("Triggers", esc(s.triggers) || null)}
       ${whenUse ? row("When to use", esc(whenUse)) : ""}
-      ${row("When not to use", s.whenNot ? esc(s.whenNot) : "<span class='value muted'>not declared</span>")}
-      ${row("Tools it can call", toolChips || riskyOnly ? `<div class="tool-chips">${toolChips}${riskyOnly}</div>` : "<span class='value muted'>none mentioned</span>")}
-      ${row("Files referenced", s.files.length ? `<ul>${s.files.map((f) => `<li class="mono">${esc(f)}</li>`).join("")}</ul>` : "<span class='value muted'>none</span>")}
-      ${row(g.copies > 1 ? `Path (×${g.copies} identical installs)` : "Path", `<ul>${paths}</ul><button class="mini-btn" data-action="editor" data-dir="${esc(s.dir)}">Open in Cursor</button>`)}
-      ${(overlapLinks || dupLine) ? row("Overlaps with", `<ul>${dupLine}${overlapLinks}</ul>`) : ""}
+      ${row("When not to use", s.whenNot ? esc(s.whenNot) : mutedSpan("not declared"))}
+      ${row("Tools it can call", toolChips || riskyOnly ? `<div class="${C.toolChips}">${toolChips}${riskyOnly}</div>` : mutedSpan("none mentioned"))}
+      ${row("Files referenced", s.files.length ? `<ul class="${C.valueList}">${s.files.map((f) => `<li class="mono ${C.mono} ${C.valueLi}">${esc(f)}</li>`).join("")}</ul>` : mutedSpan("none"))}
+      ${row(g.copies > 1 ? `Path (×${g.copies} identical installs)` : "Path", `<ul class="${C.valueList}">${paths}</ul><button class="mini-btn ${C.miniBtn}" data-action="editor" data-dir="${esc(s.dir)}">Open in Cursor</button>`)}
+      ${(overlapLinks || dupLine) ? row("Overlaps with", `<ul class="${C.valueList}">${dupLine}${overlapLinks}</ul>`) : ""}
       ${row("Version / lock", lockHtml)}
       ${row("Size", `~${s.tokens} tokens · ${s.sections.length} sections`)}
     </div>
-    ${sectionsHtml ? `<div class="body-sections">${sectionsHtml}</div>` : ""}`;
+    ${sectionsHtml ? `<div class="body-sections ${C.bodySections}">${sectionsHtml}</div>` : ""}`;
 }
 
 async function renderTabSource(body, s) {
-  body.innerHTML = `<div class="source-block">Loading…</div>`;
+  body.innerHTML = `<div class="source-block ${C.sourceBlock}">Loading…</div>`;
   try {
     const raw = await window.typecase.raw(s.path);
     body.querySelector(".source-block").textContent = raw;
@@ -439,17 +593,18 @@ async function renderTabSource(body, s) {
 }
 
 function diffItemHtml(c) {
+  const li = (cls, semantic, inner) => `<li class="${semantic} ${cls}">${inner}</li>`;
   switch (c.kind) {
-    case "section-added": return `<li class="added">New section “${esc(c.heading)}”</li>`;
-    case "section-removed": return `<li class="removed">Section “${esc(c.heading)}” removed</li>`;
-    case "section-changed": return `<li class="changed">Section “${esc(c.heading)}” rewritten</li>`;
-    case "description": return `<li class="changed">Description changed</li>`;
-    case "triggers": return `<li class="changed">Triggers changed</li>`;
-    case "when-not": return `<li class="changed">“When not to use” changed</li>`;
-    case "commands": return `<li class="changed">Commands: ${c.added?.length ? `+${c.added.map(esc).join(", ")}` : ""} ${c.removed?.length ? `−${c.removed.map(esc).join(", ")}` : ""}</li>`;
-    case "risky-tools": return `<li class="removed">Risky tools: ${c.added?.length ? `+${c.added.map(esc).join(", ")}` : ""} ${c.removed?.length ? `−${c.removed.map(esc).join(", ")}` : ""}</li>`;
-    case "files": return `<li class="changed">Files referenced: ${(c.added ?? []).length} added, ${(c.removed ?? []).length} removed</li>`;
-    default: return `<li>${esc(c.kind)}</li>`;
+    case "section-added": return li(C.diffLiAdded, "added", `New section “${esc(c.heading)}”`);
+    case "section-removed": return li(C.diffLiRemoved, "removed", `Section “${esc(c.heading)}” removed`);
+    case "section-changed": return li(C.diffLiChanged, "changed", `Section “${esc(c.heading)}” rewritten`);
+    case "description": return li(C.diffLiChanged, "changed", "Description changed");
+    case "triggers": return li(C.diffLiChanged, "changed", "Triggers changed");
+    case "when-not": return li(C.diffLiChanged, "changed", "“When not to use” changed");
+    case "commands": return li(C.diffLiChanged, "changed", `Commands: ${c.added?.length ? `+${c.added.map(esc).join(", ")}` : ""} ${c.removed?.length ? `−${c.removed.map(esc).join(", ")}` : ""}`);
+    case "risky-tools": return li(C.diffLiRemoved, "removed", `Risky tools: ${c.added?.length ? `+${c.added.map(esc).join(", ")}` : ""} ${c.removed?.length ? `−${c.removed.map(esc).join(", ")}` : ""}`);
+    case "files": return li(C.diffLiChanged, "changed", `Files referenced: ${(c.added ?? []).length} added, ${(c.removed ?? []).length} removed`);
+    default: return li(C.diffLi, "", esc(c.kind));
   }
 }
 
@@ -462,21 +617,21 @@ function renderTabHistory(body, g, s) {
 
   let html = "";
   if (!data.lock) {
-    html = `<div class="empty-hint">No <code>skills.lock</code> in ${esc(data.cwd)} yet. Run <code>typecase lock</code> to pin every installed skill, then this tab shows what changed and why it matters.</div>`;
+    html = `<div class="empty-hint ${C.emptyHint}">No <code>skills.lock</code> in ${esc(data.cwd)} yet. Run <code>typecase lock</code> to pin every installed skill, then this tab shows what changed and why it matters.</div>`;
   } else {
     if (change) {
-      html += `<div class="history-entry">
-        <h3>Since lock <span class="hash">${esc(change.fromHash ?? "")}${change.toHash ? " → " + esc(change.toHash) : ""}</span></h3>
-        <div class="para">${esc((change.paragraph ?? "").replace(/\*\*/g, ""))}</div>
-        ${change.changes?.length ? `<ul class="diff-list">${change.changes.map(diffItemHtml).join("")}</ul>` : ""}
+      html += `<div class="history-entry ${C.historyEntry}">
+        <h3 class="${C.historyH3}">Since lock <span class="hash ${C.historyHash}">${esc(change.fromHash ?? "")}${change.toHash ? " → " + esc(change.toHash) : ""}</span></h3>
+        <div class="para ${C.historyPara}">${esc((change.paragraph ?? "").replace(/\*\*/g, ""))}</div>
+        ${change.changes?.length ? `<ul class="diff-list ${C.diffList}">${change.changes.map(diffItemHtml).join("")}</ul>` : ""}
       </div>`;
     } else {
-      html += `<div class="empty-hint">Unchanged since lock${lockEntry ? ` (<span class="mono">${esc(lockEntry.hash.slice(0, 12))}</span>, ${esc(new Date(data.lock.generatedAt).toLocaleString())})` : ""}.</div>`;
+      html += `<div class="empty-hint ${C.emptyHint}">Unchanged since lock${lockEntry ? ` (<span class="mono ${C.mono}">${esc(lockEntry.hash.slice(0, 12))}</span>, ${esc(new Date(data.lock.generatedAt).toLocaleString())})` : ""}.</div>`;
     }
     if (lockEntry) {
-      html += `<div class="history-entry">
-        <h3>Locked version <span class="hash">${esc(lockEntry.hash.slice(0, 12))}</span></h3>
-        <div class="para">Pinned ${esc(new Date(data.lock.generatedAt).toLocaleString())} · ${
+      html += `<div class="history-entry ${C.historyEntry}">
+        <h3 class="${C.historyH3}">Locked version <span class="hash ${C.historyHash}">${esc(lockEntry.hash.slice(0, 12))}</span></h3>
+        <div class="para ${C.historyPara}">Pinned ${esc(new Date(data.lock.generatedAt).toLocaleString())} · ${
           lockEntry.source?.kind === "git"
             ? `from ${esc(lockEntry.source.remote ?? "git")} @ ${esc((lockEntry.source.commit ?? "").slice(0, 7))}`
             : lockEntry.source?.version ? `plugin v${esc(lockEntry.source.version)}` : "local install"
@@ -490,7 +645,7 @@ function renderTabHistory(body, g, s) {
     .map((block) => {
       const [date, ...lines] = block.split("\n");
       const mine = lines.filter((l) => l.includes(`**${s.name}**`)).map((l) => l.replace(/^- /, ""));
-      return `<div class="history-entry"><h3>${esc(date.trim())}</h3>${mine.map((m) => `<div class="para">${esc(m.replace(/\*\*/g, ""))}</div>`).join("")}</div>`;
+      return `<div class="history-entry ${C.historyEntry}"><h3 class="${C.historyH3}">${esc(date.trim())}</h3>${mine.map((m) => `<div class="para ${C.historyPara}">${esc(m.replace(/\*\*/g, ""))}</div>`).join("")}</div>`;
     }).join("");
   if (relevant) html += relevant;
   body.innerHTML = html;
@@ -519,7 +674,7 @@ function moveFocus(delta) {
   const rows = [...document.querySelectorAll("#rows .skill-row:not([hidden])")];
   if (!rows.length) return;
   state.focusIndex = Math.max(0, Math.min(rows.length - 1, (state.focusIndex < 0 ? 0 : state.focusIndex + delta)));
-  rows.forEach((r, i) => r.classList.toggle("focused", i === state.focusIndex));
+  rows.forEach((r, i) => { r.className = rowClass(i === state.focusIndex); });
   rows[state.focusIndex].scrollIntoView({ block: "nearest" });
 }
 
@@ -572,12 +727,14 @@ function paletteMatches(q) {
 function renderPalette(q) {
   const matches = paletteMatches(q);
   paletteSel = Math.min(paletteSel, Math.max(0, matches.length - 1));
-  $("#palette-results").innerHTML = matches.map((m, i) => `
-    <div class="palette-row${i === paletteSel ? " selected" : ""}" data-key="${esc(m.g.key)}">
-      <span class="name">${esc(m.g.rep.name)}</span>
-      <span class="d">${esc(m.g.rep.description ?? "")}</span>
-      <span class="t">${esc(toolLabel(m.g.rep.tool))} · ${esc(m.g.rep.scope)}</span>
-    </div>`).join("");
+  $("#palette-results").innerHTML = matches.map((m, i) => {
+    const sel = i === paletteSel;
+    return `<div class="palette-row${sel ? " selected" : ""} ${sel ? C.paletteRowSelected : C.paletteRow}" data-key="${esc(m.g.key)}">
+      <span class="name ${C.paletteName}">${esc(m.g.rep.name)}</span>
+      <span class="d ${sel ? C.paletteDescSelected : C.paletteDesc}">${esc(m.g.rep.description ?? "")}</span>
+      <span class="t ${sel ? C.paletteToolSelected : C.paletteTool}">${esc(toolLabel(m.g.rep.tool))} · ${esc(m.g.rep.scope)}</span>
+    </div>`;
+  }).join("");
 }
 
 $("#palette-results").addEventListener("click", (e) => {
@@ -603,16 +760,25 @@ function setTab(tab) {
   renderContent();
 }
 
-$("#toggle-sidebar").addEventListener("click", () => $("#app").classList.toggle("sidebar-hidden"));
+$("#toggle-sidebar").addEventListener("click", () => {
+  sidebarHidden = !sidebarHidden;
+  $("#sidebar").className = "sidebar " + cx(styles.sidebar, sidebarHidden && styles.sidebarHidden);
+});
 $("#density-btn").addEventListener("click", () => {
   state.density = state.density === "cozy" ? "compact" : "cozy";
-  $("#density-btn").classList.toggle("active", state.density === "compact");
-  $("#rows")?.classList.toggle("compact", state.density === "compact");
+  state.focusIndex = -1;
+  $("#density-btn").className = "tb-btn " + (state.density === "compact" ? C.tbBtnActive : C.tbBtn);
+  if (rowsCache) {
+    for (const el of rowsCache.byKey.values()) {
+      el.className = rowClass(false);
+      el.querySelector(".r-name").className = rNameClass();
+    }
+  }
 });
 for (const b of document.querySelectorAll(".chip"))
   b.addEventListener("click", () => {
     state.chips[b.dataset.chip] = !state.chips[b.dataset.chip];
-    b.classList.toggle("active", state.chips[b.dataset.chip]);
+    b.className = "chip " + (state.chips[b.dataset.chip] ? C.chipActive : C.chip);
     renderContent();
   });
 $("#theme-btn").addEventListener("click", () => {
@@ -639,7 +805,11 @@ async function load() {
   const t0 = performance.now();
   data = await window.typecase.data();
   const t1 = performance.now();
-  if (data.platform === "darwin") document.body.classList.add("mac");
+  if (data.platform === "darwin") {
+    isMac = true;
+    document.body.classList.add("mac");
+    document.body.className = "mac " + cx(styles.body, styles.bodyMac);
+  }
   model = buildModel();
   rowsCache = null;
   renderSidebar();
@@ -656,5 +826,6 @@ window.typecase.onSkillsChanged(async () => {
   renderContent();
 });
 
+applyShellStyles();
 applyTheme();
 load();

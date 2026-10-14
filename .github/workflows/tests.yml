@@ -32,5 +32,8 @@ jobs:
           node-version: 22
       - run: npm install --no-fund --no-audit
         working-directory: app
+      # Compile the StyleX renderer (renderer/dist) before the smoke tests.
+      - run: npm run build
+        working-directory: app
       - run: xvfb-run --auto-servernum npx playwright test
         working-directory: app
