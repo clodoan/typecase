@@ -1,13 +1,13 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseFrontmatter, parseSkill, hashSkillDir } from "./lib/parse.mjs";
-import { discover, where, jaccard, tokenSet } from "./lib/discover.mjs";
+import { discover, displayGroups, where, jaccard, tokenSet } from "./lib/discover.mjs";
 import { writeLock, readLock, diffAgainstLock, sectionDiff, changeParagraph, pin } from "./lib/lockfile.mjs";
 
 const CLI = fileURLToPath(new URL("./typecase.mjs", import.meta.url));
@@ -124,6 +124,54 @@ test("duplicates: same name in two tools, flagged identical when hashes match", 
   assert.ok(dup, "review-pr duplicate not flagged");
   assert.equal(dup.installs.length, 2);
   assert.equal(dup.identical, true);
+});
+
+test("cursor plugin cache: only the newest revision per plugin is scanned", () => {
+  const h = mkdtempSync(path.join(tmpdir(), "typecase-rev-"));
+  const old = writeSkill(h, ".cursor/plugins/cache/mkt/777/aaa111/skills", "rev-skill", {
+    description: "Old revision. Use never.",
+  });
+  const fresh = writeSkill(h, ".cursor/plugins/cache/mkt/777/bbb222/skills", "rev-skill", {
+    description: "New revision. Use always.",
+  });
+  const past = new Date(Date.now() - 86400000);
+  utimesSync(path.dirname(path.dirname(old)), past, past);
+
+  const prevHome = process.env.TYPECASE_HOME;
+  process.env.TYPECASE_HOME = h;
+  try {
+    const data = discover({ cwd: h });
+    const revSkills = data.skills.filter((s) => s.name === "rev-skill");
+    assert.equal(revSkills.length, 1, `expected 1, saw ${revSkills.map((s) => s.path).join(", ")}`);
+    assert.ok(revSkills[0].path.startsWith(path.dirname(path.dirname(fresh))), revSkills[0].path);
+    assert.match(revSkills[0].description, /New revision/);
+  } finally {
+    process.env.TYPECASE_HOME = prevHome;
+    rmSync(h, { recursive: true, force: true });
+  }
+});
+
+test("displayGroups folds identical installs into one entry, keeps distinct ones apart", () => {
+  const data = discover({ cwd: proj });
+  const groups = displayGroups(data.skills);
+  assert.ok(groups.length < data.skills.length, "identical review-pr copies did not fold");
+
+  const reviewGroup = groups.find((idxs) => data.skills[idxs[0]].name === "review-pr");
+  assert.equal(reviewGroup.length, 2, "review-pr is installed twice with identical content");
+  const [a, b] = reviewGroup.map((i) => data.skills[i]);
+  assert.equal(a.hash, b.hash);
+  assert.notEqual(a.path, b.path);
+  assert.deepEqual([a.tool, b.tool].sort(), ["claude", "cursor"]);
+
+  // Same name + different content stays two entries.
+  const dir = writeSkill(home, ".codex/skills", "review-pr", { description: "A different reviewer. Use elsewhere." });
+  try {
+    const data2 = discover({ cwd: proj });
+    const groups2 = displayGroups(data2.skills).filter((idxs) => data2.skills[idxs[0]].name === "review-pr");
+    assert.equal(groups2.length, 2, "different-content same-name must not fold");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("overlaps: different names claiming the same job are flagged", () => {

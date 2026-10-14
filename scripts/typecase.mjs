@@ -13,7 +13,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { discover, where } from "./lib/discover.mjs";
+import { discover, displayGroups, where } from "./lib/discover.mjs";
 import {
   LOCKFILE, CHANGELOG, writeLock, readLock, diffAgainstLock, appendChangelog, pin,
 } from "./lib/lockfile.mjs";
@@ -75,9 +75,7 @@ function cmdLs(args) {
   const tool = opt(json.args, "--tool");
   const scope = opt(tool.args, "--scope");
   const data = discover();
-  let skills = [...data.skills].sort(
-    (a, b) => a.tool.localeCompare(b.tool) || a.scope.localeCompare(b.scope) || a.name.localeCompare(b.name),
-  );
+  let skills = [...data.skills];
   if (tool.value) skills = skills.filter((s) => s.tool === tool.value);
   if (scope.value) skills = skills.filter((s) => s.scope === scope.value);
 
@@ -85,17 +83,25 @@ function cmdLs(args) {
     console.log(JSON.stringify({ ...data, skills }, null, 2));
     return;
   }
-  const dupNames = new Set(data.duplicates.map((d) => d.name));
+  // One line per distinct skill: identical installs fold into ×N.
+  const groups = displayGroups(skills)
+    .map((idxs) => ({ s: skills[idxs[0]], copies: idxs.length, installs: idxs.map((i) => skills[i]) }))
+    .sort((a, b) => a.s.tool.localeCompare(b.s.tool) || a.s.scope.localeCompare(b.s.scope) || a.s.name.localeCompare(b.s.name));
+  const dupNames = new Set(data.duplicates.filter((d) => !d.identical).map((d) => d.name));
   const overlapNames = new Set(data.overlaps.flatMap((o) => [o.a.name, o.b.name]));
-  console.log(c.bold(`${skills.length} skills`) + c.dim(` · ${data.roots.filter((r) => r.exists).length} roots scanned`));
+  console.log(
+    c.bold(`${groups.length} skills`) +
+    c.dim(` (${skills.length} installs) · ${data.roots.filter((r) => r.exists).length} roots scanned`),
+  );
   let lastGroup = "";
-  for (const s of skills) {
+  for (const { s, copies } of groups) {
     const group = `${s.tool} · ${s.scope}`;
     if (group !== lastGroup) {
       console.log("\n" + c.cyan(group));
       lastGroup = group;
     }
     const marks = [
+      copies > 1 ? c.dim(`×${copies}`) : "",
       dupNames.has(s.name) ? c.yellow("dup") : "",
       overlapNames.has(s.name) ? c.yellow("overlap") : "",
       s.riskyTools.length ? c.red(s.riskyTools.join(",")) : "",
@@ -106,10 +112,11 @@ function cmdLs(args) {
       `  ${c.bold(s.name.padEnd(28).slice(0, 28))} ${String(s.tokens).padStart(5)}tok  ${desc}${marks ? "  " + marks : ""}`,
     );
   }
-  if (data.duplicates.length) {
-    console.log("\n" + c.yellow(`duplicates (${data.duplicates.length}):`));
-    for (const d of data.duplicates) {
-      console.log(`  ${c.bold(d.name)} ${d.identical ? c.dim("(identical copies)") : c.red("(DIFFERENT content, same name)")}`);
+  const collisions = data.duplicates.filter((d) => !d.identical);
+  if (collisions.length) {
+    console.log("\n" + c.yellow(`same name, different content (${collisions.length}):`));
+    for (const d of collisions) {
+      console.log(`  ${c.bold(d.name)}`);
       for (const i of d.installs) console.log(c.dim(`    ${i.tool}/${i.scope}  ${i.path}`));
     }
   }

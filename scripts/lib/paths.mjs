@@ -32,7 +32,7 @@
  * typecase/typecase.json`. `TYPECASE_HOME` overrides `~` for tests.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -67,14 +67,57 @@ export function home() {
   return process.env.TYPECASE_HOME ?? homedir();
 }
 
+function subdirs(dir) {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => path.join(dir, e.name));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The Cursor plugin cache keeps every downloaded revision of a plugin
+ * (`cache/<marketplace>/<id>/<rev>/`), so scanning the whole cache
+ * shows one copy of each skill per cached revision. Only the newest
+ * revision per plugin (dir mtime) is the one Cursor serves; scan that.
+ */
+export function newestPluginRevisionDirs(cacheDir) {
+  const newest = [];
+  for (const marketplace of subdirs(cacheDir)) {
+    for (const plugin of subdirs(marketplace)) {
+      let best = null;
+      let bestM = -Infinity;
+      for (const rev of subdirs(plugin)) {
+        let m;
+        try {
+          m = statSync(rev).mtimeMs;
+        } catch {
+          continue;
+        }
+        if (m > bestM) { bestM = m; best = rev; }
+      }
+      if (best) newest.push(best);
+    }
+  }
+  return newest;
+}
+
 /**
  * All skill roots as { tool, scope, dir, note } (dirs may not exist —
  * discovery filters). scope: "project" | "user" | "plugin" | "admin".
+ * A root may carry `dirs`: the concrete directories to scan instead of
+ * `dir` (used to scan only the newest cached revision per plugin).
  */
 export function skillRoots({ cwd = process.cwd() } = {}) {
   const h = home();
   const roots = [];
-  const add = (tool, scope, dir, note = "") => roots.push({ tool, scope, dir: path.resolve(dir), note });
+  const add = (tool, scope, dir, note = "") => {
+    const root = { tool, scope, dir: path.resolve(dir), note };
+    roots.push(root);
+    return root;
+  };
 
   // Grok [GROK]
   for (const dir of walkUp(cwd, ".grok/skills")) add("grok", "project", dir);
@@ -85,7 +128,9 @@ export function skillRoots({ cwd = process.cwd() } = {}) {
   // Cursor [CURSOR]
   for (const dir of walkUp(cwd, ".cursor/skills")) add("cursor", "project", dir);
   add("cursor", "user", path.join(h, ".cursor", "skills"));
-  add("cursor", "plugin", path.join(h, ".cursor", "plugins", "cache"), "observed marketplace cache layout");
+  const cursorCache = path.join(h, ".cursor", "plugins", "cache");
+  add("cursor", "plugin", cursorCache, "observed marketplace cache layout; newest revision per plugin")
+    .dirs = newestPluginRevisionDirs(cursorCache);
 
   // Claude Code [CLAUDE]
   for (const dir of walkUp(cwd, ".claude/skills")) add("claude", "project", dir);

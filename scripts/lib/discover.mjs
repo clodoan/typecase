@@ -63,7 +63,7 @@ export function discover({ cwd = process.cwd() } = {}) {
 
   for (const root of roots) {
     if (root.error) continue;
-    for (const file of walkForSkills(root.dir, root.tool === "codex" ? 8 : 5)) {
+    for (const file of (root.dirs ?? [root.dir]).flatMap((d) => walkForSkills(d, root.tool === "codex" ? 8 : 5))) {
       const real = path.resolve(file);
       if (seenPaths.has(real)) continue;
       seenPaths.add(real);
@@ -121,6 +121,23 @@ export function discover({ cwd = process.cwd() } = {}) {
     duplicates,
     overlaps,
   };
+}
+
+/**
+ * Display-level grouping: identical installs (same name AND same
+ * content hash) collapse into one entry. Returns an array of groups,
+ * each an array of indexes into `skills`; the first index is the
+ * representative. Per-install records and lock semantics are untouched
+ * — this is how the app rows and CLI `ls` fold ×N copies.
+ */
+export function displayGroups(skills) {
+  const byKey = new Map();
+  skills.forEach((s, i) => {
+    const key = s.error ? `err:${i}` : `${s.name}\u0000${s.hash}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(i);
+  });
+  return [...byKey.values()];
 }
 
 /** Rank skills for `where <query>`: name > triggers > description > body. */
