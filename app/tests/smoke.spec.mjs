@@ -74,7 +74,7 @@ test.afterAll(async () => {
 });
 
 test("row list renders every fixture skill with count and badges", async () => {
-  await expect(page.locator(".skill-row")).toHaveCount(2);
+  await expect(page.locator(".skill-row:visible")).toHaveCount(2);
   await expect(page.locator(".count-head h1")).toHaveText("2 Skills");
   await expect(page.locator(".skill-row", { hasText: "alpha-review" }).locator(".badge.changed")).toBeVisible();
 });
@@ -99,8 +99,10 @@ test("History tab shows the plain-language change paragraph", async () => {
 });
 
 test("sidebar tool filter narrows the row list", async () => {
+  // Filtering hides cached row nodes instead of rebuilding the list,
+  // so count only visible rows.
   await page.keyboard.press("Escape");
   await page.locator(".nav-item", { hasText: "Claude Code" }).click();
-  await expect(page.locator(".skill-row")).toHaveCount(1);
-  await expect(page.locator(".skill-row .r-name")).toHaveText("beta-notes");
+  await expect(page.locator(".skill-row:visible")).toHaveCount(1);
+  await expect(page.locator(".skill-row:visible .r-name")).toHaveText("beta-notes");
 });

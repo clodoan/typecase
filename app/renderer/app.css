@@ -181,6 +181,7 @@ body.mac { background: transparent; } /* let window vibrancy show through */
   outline: none;
 }
 .rows-list.compact .skill-row { padding: 5px 10px; }
+.skill-row[hidden] { display: none; }
 .skill-row:hover { background: var(--hover); }
 .skill-row:focus-visible, .skill-row.focused { background: var(--active-row); }
 .skill-row .r-name {

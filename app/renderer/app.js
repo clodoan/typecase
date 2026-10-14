@@ -1,5 +1,12 @@
 /* Typecase renderer. All data comes from the main process over the
-   preload bridge; this file is pure presentation + navigation state. */
+   preload bridge; this file is pure presentation + navigation state.
+
+   Rendering discipline: every derived set (changed keys, overlap paths,
+   name collisions, per-group flags, sidebar counts) is computed ONCE
+   per data payload into `model`. Lists render as single HTML strings
+   with one delegated listener per surface. A state change re-renders
+   only the surface it affects; the sidebar is built once per payload
+   and only its active highlight is synced afterwards. */
 
 const TOOLS = [
   { id: "grok", label: "Grok" },
@@ -29,6 +36,7 @@ const LIB_ICONS = {
 };
 
 let data = null;
+let model = null;
 const state = {
   library: "all",       // all | active | changed | overlaps
   tool: null,
@@ -38,7 +46,7 @@ const state = {
   density: "cozy",
   theme: localStorage.getItem("typecase-theme") || "system",
   view: "grid",         // grid | detail
-  skillKey: null,
+  groupKey: null,
   tab: "rendered",
   showFrontmatter: false,
   focusIndex: -1,
@@ -73,35 +81,80 @@ function applyTheme() {
 }
 darkMQ.addEventListener("change", () => { if (state.theme === "system") applyTheme(); });
 
-/* ---------- derived data ---------- */
+/* ---------- model: derived once per data payload ---------- */
 
-function changedKeys() {
-  // Change entries carry the lockfile key (tool:scope:name).
-  return new Set((data.changes ?? []).filter((c) => c.status !== "removed").map((c) => c.key));
-}
-const isChanged = (changed, s) => changed.has(lockKeyOf(s));
-function overlapNames() {
-  const s = new Set();
-  for (const o of data.overlaps) { s.add(o.a.path); s.add(o.b.path); }
-  return s;
-}
-function dupNames() {
-  return new Set(data.duplicates.map((d) => d.name));
+function buildModel() {
+  const skills = data.skills;
+  const changedKeys = new Set((data.changes ?? []).filter((c) => c.status !== "removed").map((c) => c.key));
+  const changeByKey = new Map((data.changes ?? []).map((c) => [c.key, c]));
+  const overlapPaths = new Set();
+  for (const o of data.overlaps) { overlapPaths.add(o.a.path); overlapPaths.add(o.b.path); }
+  const collisionNames = new Set(data.duplicates.filter((d) => !d.identical).map((d) => d.name));
+  const overlapsBySkillPath = new Map();
+  for (const o of data.overlaps) {
+    for (const end of [o.a.path, o.b.path]) {
+      if (!overlapsBySkillPath.has(end)) overlapsBySkillPath.set(end, []);
+      overlapsBySkillPath.get(end).push(o);
+    }
+  }
+
+  const groups = [];
+  for (const idxs of data.displayGroups ?? skills.map((_, i) => [i])) {
+    const installs = idxs.map((i) => skills[i]);
+    const rep = installs[0];
+    if (rep.error) continue;
+    groups.push({
+      key: keyOf(rep),
+      rep,
+      installs,
+      copies: installs.length,
+      changed: installs.some((s) => changedKeys.has(lockKeyOf(s))),
+      overlap: installs.some((s) => overlapPaths.has(s.path)),
+      collision: collisionNames.has(rep.name),
+      risky: rep.riskyTools.length > 0,
+      tools: [...new Set(installs.map((s) => s.tool))],
+      scopes: [...new Set(installs.map((s) => s.scope))],
+      roots: [...new Set(installs.map((s) => s.root))],
+    });
+  }
+  groups.sort((a, b) => a.rep.name.localeCompare(b.rep.name));
+
+  const count = (pred) => groups.reduce((n, g) => n + (pred(g) ? 1 : 0), 0);
+  return {
+    groups,
+    byKey: new Map(groups.map((g) => [g.key, g])),
+    changeByKey,
+    overlapsBySkillPath,
+    counts: {
+      all: groups.length,
+      changed: count((g) => g.changed),
+      overlaps: count((g) => g.overlap),
+      tools: new Map(TOOLS.map((t) => [t.id, count((g) => g.tools.includes(t.id))])),
+      scopes: new Map(SCOPES.map((sc) => [sc.id, count((g) => g.scopes.includes(sc.id))])),
+      roots: new Map(data.roots.filter((r) => r.exists).map((r) => [r.dir, count((g) => g.roots.includes(r.dir))])),
+    },
+  };
 }
 
-function visibleSkills() {
-  const changed = changedKeys();
-  const overlaps = overlapNames();
-  let out = data.skills.filter((s) => !s.error);
-  if (state.library === "changed") out = out.filter((s) => isChanged(changed, s));
-  if (state.library === "overlaps") out = out.filter((s) => overlaps.has(s.path));
-  if (state.tool) out = out.filter((s) => s.tool === state.tool);
-  if (state.scope) out = out.filter((s) => s.scope === state.scope);
-  if (state.collection) out = out.filter((s) => s.root === state.collection);
-  if (state.chips.risky) out = out.filter((s) => s.riskyTools.length);
-  if (state.chips.overlaps) out = out.filter((s) => overlaps.has(s.path));
-  if (state.chips.changed) out = out.filter((s) => isChanged(changed, s));
+function visibleGroups() {
+  let out = model.groups;
+  if (state.library === "changed") out = out.filter((g) => g.changed);
+  if (state.library === "overlaps") out = out.filter((g) => g.overlap);
+  if (state.tool) out = out.filter((g) => g.tools.includes(state.tool));
+  if (state.scope) out = out.filter((g) => g.scopes.includes(state.scope));
+  if (state.collection) out = out.filter((g) => g.roots.includes(state.collection));
+  if (state.chips.risky) out = out.filter((g) => g.risky);
+  if (state.chips.overlaps) out = out.filter((g) => g.overlap);
+  if (state.chips.changed) out = out.filter((g) => g.changed);
   return out;
+}
+
+/** The install whose tool/scope/root matches the active filter. */
+function repFor(g) {
+  if (state.tool) return g.installs.find((s) => s.tool === state.tool) ?? g.rep;
+  if (state.scope) return g.installs.find((s) => s.scope === state.scope) ?? g.rep;
+  if (state.collection) return g.installs.find((s) => s.root === state.collection) ?? g.rep;
+  return g.rep;
 }
 
 function fuzzyScore(query, s) {
@@ -121,139 +174,162 @@ function fuzzyScore(query, s) {
   return hits === words.length ? 8 : hits > 0 ? 2 : -1;
 }
 
-/* ---------- sidebar ---------- */
+/* ---------- sidebar: built once per payload, active state synced ---------- */
 
-function navItem({ icon, label, count, active, special, onClick }) {
-  const b = document.createElement("button");
-  b.className = "nav-item" + (active ? " active" : "") + (special ? " special" : "");
-  b.innerHTML = `${icon ?? ""}<span>${esc(label)}</span>${count != null ? `<span class="count">${count}</span>` : ""}`;
-  b.addEventListener("click", onClick);
-  return b;
+function navButton({ nav, icon, label, count, special }) {
+  return `<button class="nav-item${special ? " special" : ""}" data-nav="${esc(nav)}">
+    ${icon ?? ""}<span>${esc(label)}</span>${count != null ? `<span class="count">${count}</span>` : ""}
+  </button>`;
 }
 
 function renderSidebar() {
-  const nav = $("#sidenav");
-  nav.replaceChildren();
-  const skills = data.skills.filter((s) => !s.error);
-  const changed = changedKeys();
-  const overlaps = overlapNames();
-  const pick = (patch) => () =>
-    transition(() => {
-      Object.assign(state, { view: "grid", skillKey: null, tab: "rendered", focusIndex: -1 }, patch);
-      render();
-    });
-
-  const h = (t) => { const d = document.createElement("div"); d.className = "nav-heading"; d.textContent = t; nav.appendChild(d); };
-
-  h("Library");
+  const { counts } = model;
+  let html = `<div class="nav-heading">Library</div>`;
   const lib = [
-    { id: "all", label: "All Skills", count: skills.length },
-    { id: "active", label: "Active", count: skills.length },
-    { id: "changed", label: "Changed since lock", count: changed.size, special: true },
-    { id: "overlaps", label: "Overlaps", count: new Set([...overlaps].map((p) => p)).size, special: true },
+    { id: "all", label: "All Skills", count: counts.all },
+    { id: "active", label: "Active", count: counts.all },
+    { id: "changed", label: "Changed since lock", count: counts.changed, special: true },
+    { id: "overlaps", label: "Overlaps", count: counts.overlaps, special: true },
   ];
   for (const l of lib) {
-    nav.appendChild(navItem({
-      icon: LIB_ICONS[l.id], label: l.label, count: l.count, special: l.special,
-      active: state.library === l.id && !state.tool && !state.scope && !state.collection,
-      onClick: pick({ library: l.id, tool: null, scope: null, collection: null }),
-    }));
+    html += navButton({ nav: `lib:${l.id}`, icon: LIB_ICONS[l.id], label: l.label, count: l.count, special: l.special });
   }
 
-  h("Tools");
+  html += `<div class="nav-heading">Tools</div>`;
   for (const t of TOOLS) {
-    const count = skills.filter((s) => s.tool === t.id).length;
-    if (!count && !["grok", "cursor", "claude", "codex"].includes(t.id)) continue;
-    nav.appendChild(navItem({
-      icon: TOOL_ICONS[t.id], label: t.label, count,
-      active: state.tool === t.id,
-      onClick: pick({ library: "all", tool: t.id, scope: null, collection: null }),
-    }));
+    const count = counts.tools.get(t.id) ?? 0;
+    if (!count && t.id === "shared") continue;
+    html += navButton({ nav: `tool:${t.id}`, icon: TOOL_ICONS[t.id], label: t.label, count });
   }
 
-  h("Collections");
-  const roots = data.roots.filter((r) => r.exists && skills.some((s) => s.root === r.dir));
-  for (const r of roots) {
+  html += `<div class="nav-heading">Collections</div>`;
+  for (const r of data.roots.filter((x) => x.exists && (counts.roots.get(x.dir) ?? 0) > 0)) {
     const short = r.dir.replace(data.cwd, "·").replace(/^\/(home|Users)\/[^/]+/, "~");
-    nav.appendChild(navItem({
-      icon: TOOL_ICONS[r.tool] ?? LIB_ICONS.all,
-      label: short, count: skills.filter((s) => s.root === r.dir).length,
-      active: state.collection === r.dir,
-      onClick: pick({ library: "all", tool: null, scope: null, collection: r.dir }),
-    }));
+    html += navButton({ nav: `root:${r.dir}`, icon: TOOL_ICONS[r.tool] ?? LIB_ICONS.all, label: short, count: counts.roots.get(r.dir) });
   }
 
-  h("Sources");
+  html += `<div class="nav-heading">Sources</div>`;
   for (const sc of SCOPES) {
-    const count = skills.filter((s) => s.scope === sc.id).length;
-    nav.appendChild(navItem({
-      icon: LIB_ICONS.active, label: sc.label, count,
-      active: state.scope === sc.id,
-      onClick: pick({ library: "all", tool: null, scope: sc.id, collection: null }),
-    }));
+    html += navButton({ nav: `scope:${sc.id}`, icon: LIB_ICONS.active, label: sc.label, count: counts.scopes.get(sc.id) ?? 0 });
+  }
+
+  $("#sidenav").innerHTML = html;
+  syncSidebar();
+}
+
+function syncSidebar() {
+  for (const el of document.querySelectorAll("#sidenav .nav-item")) {
+    const [kind, ...restParts] = el.dataset.nav.split(":");
+    const id = restParts.join(":");
+    let active = false;
+    if (kind === "lib") active = state.library === id && !state.tool && !state.scope && !state.collection;
+    else if (kind === "tool") active = state.tool === id;
+    else if (kind === "root") active = state.collection === id;
+    else if (kind === "scope") active = state.scope === id;
+    el.classList.toggle("active", active);
   }
 }
+
+$("#sidenav").addEventListener("click", (e) => {
+  const item = e.target.closest(".nav-item");
+  if (!item) return;
+  const [kind, ...restParts] = item.dataset.nav.split(":");
+  const id = restParts.join(":");
+  transition(() => {
+    Object.assign(state, { view: "grid", groupKey: null, tab: "rendered", focusIndex: -1 });
+    if (kind === "lib") Object.assign(state, { library: id, tool: null, scope: null, collection: null });
+    else if (kind === "tool") Object.assign(state, { library: "all", tool: id, scope: null, collection: null });
+    else if (kind === "root") Object.assign(state, { library: "all", tool: null, scope: null, collection: id });
+    else if (kind === "scope") Object.assign(state, { library: "all", tool: null, scope: id, collection: null });
+    syncSidebar();
+    renderContent();
+  });
+});
 
 /* ---------- rows ---------- */
 
 function toolLabel(id) { return TOOLS.find((t) => t.id === id)?.label ?? id; }
 
-function rowBadges(s) {
-  const changed = changedKeys();
-  const overlaps = overlapNames();
-  const dups = dupNames();
+function badgesHtml(g) {
   const out = [];
-  if (s.riskyTools.length) out.push('<span class="badge risky">risky</span>');
-  if (dups.has(s.name)) out.push('<span class="badge dup">dup</span>');
-  else if (overlaps.has(s.path)) out.push('<span class="badge overlap">overlap</span>');
-  if (isChanged(changed, s)) out.push('<span class="badge changed">changed</span>');
+  if (g.copies > 1) out.push(`<span class="badge copies">×${g.copies}</span>`);
+  if (g.risky) out.push('<span class="badge risky">risky</span>');
+  if (g.collision) out.push('<span class="badge dup">dup</span>');
+  else if (g.overlap) out.push('<span class="badge overlap">overlap</span>');
+  if (g.changed) out.push('<span class="badge changed">changed</span>');
   return out.join("");
 }
 
+/* Row elements are built ONCE per data payload; filtering and
+   navigation toggle visibility on the cached nodes instead of
+   re-parsing thousands of nodes per interaction. */
+let rowsCache = null; // { wrapEl, headEl, subEl, listEl, emptyEl, byKey }
+
+function buildRowsCache() {
+  // Compact single-line rows: shared <use> icons and no inter-tag
+  // whitespace keep the one-time parse cost of large lists low.
+  let rows = "";
+  for (const g of model.groups) {
+    const rep = g.rep;
+    rows += `<div class="skill-row" tabindex="0" data-key="${esc(g.key)}">` +
+      `<span class="r-name">${esc(rep.name)}</span>` +
+      `<span class="r-desc">${esc(rep.description || "—")}</span>` +
+      `<span class="r-badges">${badgesHtml(g)}</span>` +
+      `<span class="r-tool"><svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-${esc(rep.tool)}"/></svg><span></span></span>` +
+      `<span class="r-tok">~${rep.tokens}</span></div>`;
+  }
+  const wrapEl = document.createElement("div");
+  wrapEl.innerHTML =
+    `<div class="count-head"><h1></h1><span class="sub"></span></div>` +
+    `<div class="rows-list" id="rows">${rows}<div class="empty-hint" hidden></div></div>`;
+  const byKey = new Map();
+  for (const el of wrapEl.querySelectorAll(".skill-row")) byKey.set(el.dataset.key, el);
+  rowsCache = {
+    wrapEl,
+    headEl: wrapEl.querySelector("h1"),
+    subEl: wrapEl.querySelector(".sub"),
+    listEl: wrapEl.querySelector("#rows"),
+    emptyEl: wrapEl.querySelector(".empty-hint"),
+    byKey,
+  };
+}
+
 function renderRows() {
-  const content = $("#content");
-  const skills = visibleSkills().sort((a, b) => a.name.localeCompare(b.name));
-  const scopeLabel =
+  if (!rowsCache) buildRowsCache();
+  const { wrapEl, headEl, subEl, listEl, emptyEl, byKey } = rowsCache;
+  const groups = visibleGroups();
+  const visible = new Set(groups.map((g) => g.key));
+
+  for (const [key, el] of byKey) el.hidden = !visible.has(key);
+  for (const g of groups) {
+    const el = byKey.get(g.key);
+    el.classList.remove("focused");
+    const rep = repFor(g);
+    const cell = g.tools.length === 1
+      ? `${toolLabel(rep.tool)} · ${rep.scope}`
+      : g.tools.map(toolLabel).join(" · ");
+    const cellEl = el.querySelector(".r-tool span");
+    if (cellEl.textContent !== cell) cellEl.textContent = cell;
+  }
+
+  headEl.textContent = `${groups.length} Skill${groups.length === 1 ? "" : "s"}`;
+  subEl.textContent =
     state.tool ? toolLabel(state.tool)
     : state.scope ? SCOPES.find((s) => s.id === state.scope).label
     : state.collection ? "Collection"
     : state.library === "changed" ? "Changed since lock"
     : state.library === "overlaps" ? "Overlapping"
     : "All";
-
-  const wrap = document.createElement("div");
-  wrap.innerHTML = `
-    <div class="count-head">
-      <h1>${skills.length} Skill${skills.length === 1 ? "" : "s"}</h1>
-      <span class="sub">${esc(scopeLabel)}</span>
-    </div>`;
-  const list = document.createElement("div");
-  list.className = "rows-list" + (state.density === "compact" ? " compact" : "");
-  list.id = "rows";
-
-  skills.forEach((s, i) => {
-    const row = document.createElement("div");
-    row.className = "skill-row" + (i === state.focusIndex ? " focused" : "");
-    row.tabIndex = 0;
-    row.dataset.key = keyOf(s);
-    row.innerHTML = `
-      <span class="r-name">${esc(s.name)}</span>
-      <span class="r-desc">${esc(s.description || "—")}</span>
-      <span class="r-badges">${rowBadges(s)}</span>
-      <span class="r-tool">${TOOL_ICONS[s.tool] ?? ""}<span>${esc(toolLabel(s.tool))} · ${esc(s.scope)}</span></span>
-      <span class="r-tok">~${s.tokens}</span>`;
-    const open = () => openDetail(keyOf(s), row.querySelector(".r-name"));
-    row.addEventListener("click", open);
-    row.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
-    list.appendChild(row);
-  });
-  if (!skills.length) {
-    list.innerHTML = `<div class="empty-hint">Nothing here. ${
+  emptyEl.hidden = groups.length > 0;
+  if (!groups.length) {
+    emptyEl.innerHTML = `Nothing here. ${
       state.library === "changed" ? "Run <code>typecase lock</code>, edit a skill, and changes will appear." : "Try clearing filters."
-    }</div>`;
+    }`;
   }
-  wrap.appendChild(list);
-  content.replaceChildren(wrap);
+  listEl.classList.toggle("compact", state.density === "compact");
+
+  const content = $("#content");
+  if (wrapEl.parentNode !== content) content.replaceChildren(wrapEl);
   $("#segmented-wrap").hidden = true;
 }
 
@@ -263,18 +339,18 @@ function openDetail(key, cardEl) {
   if (cardEl && !prefersReduced) cardEl.style.viewTransitionName = "hero";
   transition(() => {
     state.view = "detail";
-    state.skillKey = key;
+    state.groupKey = key;
     state.tab = "rendered";
     state.showFrontmatter = false;
-    render();
+    renderContent();
   });
 }
 
 function closeDetail() {
   transition(() => {
     state.view = "grid";
-    state.skillKey = null;
-    render();
+    state.groupKey = null;
+    renderContent();
   });
 }
 
@@ -285,36 +361,27 @@ function row(label, valueHtml, muted = false) {
 }
 
 function renderDetail() {
-  const content = $("#content");
-  const s = data.skills.find((x) => keyOf(x) === state.skillKey);
-  if (!s) { closeDetail(); return; }
-  const lockEntry = data.lock?.skills?.[lockKeyOf(s)];
-  const change = (data.changes ?? []).find((c) => c.key === lockKeyOf(s));
-  const myOverlaps = data.overlaps.filter((o) => o.a.path === s.path || o.b.path === s.path);
-  const myDup = data.duplicates.find((d) => d.name === s.name);
+  const g = model.byKey.get(state.groupKey);
+  if (!g) { closeDetail(); return; }
+  const s = repFor(g);
 
-  const el = document.createElement("div");
-  el.className = "detail";
-  el.innerHTML = `
+  $("#content").innerHTML = `<div class="detail">
     <div class="detail-top">
-      <button class="back-btn" id="back-btn">‹ Skills</button>
+      <button class="back-btn" data-action="back">‹ Skills</button>
       <div class="spacer"></div>
-      <button class="icon-btn${state.showFrontmatter ? " active" : ""}" id="fm-btn" title="Raw frontmatter">i</button>
+      <button class="icon-btn${state.showFrontmatter ? " active" : ""}" data-action="toggle-fm" title="Raw frontmatter">i</button>
     </div>
     <div class="detail-hero" style="view-transition-name: hero">${esc(s.name)}</div>
     <div class="detail-sub">${esc(s.description || "")}</div>
-    <div class="detail-badges">${rowBadges(s)}</div>
+    <div class="detail-badges">${badgesHtml(g)}</div>
     ${state.showFrontmatter ? `<div class="frontmatter-pop">${esc(JSON.stringify(s.frontmatter, null, 2))}</div>` : ""}
-    <div id="tab-body"></div>`;
-  content.replaceChildren(el);
+    <div id="tab-body"></div>
+  </div>`;
 
-  el.querySelector("#back-btn").addEventListener("click", closeDetail);
-  el.querySelector("#fm-btn").addEventListener("click", () => { state.showFrontmatter = !state.showFrontmatter; render(); });
-
-  const body = el.querySelector("#tab-body");
-  if (state.tab === "rendered") renderTabRendered(body, s, { lockEntry, myOverlaps, myDup });
+  const body = $("#tab-body");
+  if (state.tab === "rendered") renderTabRendered(body, g, s);
   else if (state.tab === "source") renderTabSource(body, s);
-  else renderTabHistory(body, s, { lockEntry, change });
+  else renderTabHistory(body, g, s);
 
   const seg = $("#segmented-wrap");
   seg.hidden = false;
@@ -322,7 +389,7 @@ function renderDetail() {
     b.classList.toggle("active", b.dataset.tab === state.tab);
 }
 
-function renderTabRendered(body, s, { lockEntry, myOverlaps, myDup }) {
+function renderTabRendered(body, g, s) {
   const whenUse = s.sections.find((x) => /when to use|^use/i.test(x.heading))?.text ?? "";
   const toolChips = s.commands.map((c) => {
     const risky = s.riskyTools.some((r) => c.includes(r) || r.includes(c.split(/\s/)[0]));
@@ -331,17 +398,26 @@ function renderTabRendered(body, s, { lockEntry, myOverlaps, myDup }) {
   const riskyOnly = s.riskyTools
     .filter((r) => !s.commands.some((c) => c.includes(r)))
     .map((r) => `<span class="tool-chip risky">${esc(r)} ⚠</span>`).join("");
+  const myOverlaps = g.installs.flatMap((inst) => model.overlapsBySkillPath.get(inst.path) ?? []);
   const overlapLinks = myOverlaps.map((o) => {
-    const other = o.a.path === s.path ? o.b : o.a;
-    const otherKey = data.skills.find((x) => x.path === other.path);
-    return `<li><a class="link-skill" data-goto="${esc(otherKey ? keyOf(otherKey) : "")}">${esc(other.name)}</a> <span class="mono" style="color:var(--ink-3)">(${Math.round(o.score * 100)}% shared vocabulary, ${esc(other.tool)})</span></li>`;
+    const other = g.installs.some((inst) => inst.path === o.a.path) ? o.b : o.a;
+    const otherGroup = model.groups.find((x) => x.installs.some((inst) => inst.path === other.path));
+    return `<li><a class="link-skill" data-action="goto" data-key="${esc(otherGroup?.key ?? "")}">${esc(other.name)}</a> <span class="mono" style="color:var(--ink-3)">(${Math.round(o.score * 100)}% shared vocabulary, ${esc(other.tool)})</span></li>`;
   }).join("");
-  const dupLine = myDup
-    ? `<li>${myDup.identical ? "Identical copy" : "Same name, different content"} in ${myDup.installs.filter((i) => i.path !== s.path).map((i) => `${esc(i.tool)} · ${esc(i.scope)}`).join(", ")}</li>`
+  const collision = data.duplicates.find((d) => !d.identical && d.name === s.name);
+  const dupLine = collision
+    ? `<li>Same name, different content in ${collision.installs.filter((i) => i.path !== s.path).map((i) => `${esc(i.tool)} · ${esc(i.scope)}`).join(", ")}</li>`
     : "";
+
+  const lockEntry = data.lock?.skills?.[lockKeyOf(s)];
   const lockHtml = lockEntry
     ? `locked <span class="mono">${esc(lockEntry.hash.slice(0, 12))}</span>${lockEntry.hash === s.hash ? " · unchanged" : ` · now <span class="mono">${esc(s.hash.slice(0, 12))}</span> (drifted)`}${lockEntry.source?.kind === "git" ? ` · ${esc(lockEntry.source.remote ?? "git")}@${esc((lockEntry.source.commit ?? "").slice(0, 7))}` : lockEntry.source?.version ? ` · v${esc(lockEntry.source.version)}` : ""}`
     : `not locked — run <code>typecase lock</code>`;
+
+  const paths = g.installs.map((inst) => `
+    <li class="path-row"><span class="mono">${esc(inst.path)}</span>
+      <button class="mini-btn" data-action="reveal" data-path="${esc(inst.path)}">Reveal in Finder</button>
+    </li>`).join("");
 
   body.innerHTML = `
     <div class="rows">
@@ -350,16 +426,11 @@ function renderTabRendered(body, s, { lockEntry, myOverlaps, myDup }) {
       ${row("When not to use", s.whenNot ? esc(s.whenNot) : "<span class='value muted'>not declared</span>")}
       ${row("Tools it can call", toolChips || riskyOnly ? `<div class="tool-chips">${toolChips}${riskyOnly}</div>` : "<span class='value muted'>none mentioned</span>")}
       ${row("Files referenced", s.files.length ? `<ul>${s.files.map((f) => `<li class="mono">${esc(f)}</li>`).join("")}</ul>` : "<span class='value muted'>none</span>")}
-      ${row("Path", `<div class="path-row"><span class="mono">${esc(s.path)}</span><button class="mini-btn" id="reveal-btn">Reveal in Finder</button><button class="mini-btn" id="editor-btn">Open in Cursor</button></div>`)}
+      ${row(g.copies > 1 ? `Path (×${g.copies} identical installs)` : "Path", `<ul>${paths}</ul><button class="mini-btn" data-action="editor" data-dir="${esc(s.dir)}">Open in Cursor</button>`)}
       ${(overlapLinks || dupLine) ? row("Overlaps with", `<ul>${dupLine}${overlapLinks}</ul>`) : ""}
       ${row("Version / lock", lockHtml)}
       ${row("Size", `~${s.tokens} tokens · ${s.sections.length} sections`)}
     </div>`;
-
-  body.querySelector("#reveal-btn").addEventListener("click", () => window.typecase.reveal(s.path));
-  body.querySelector("#editor-btn").addEventListener("click", () => window.typecase.openEditor(s.dir));
-  for (const a of body.querySelectorAll("[data-goto]"))
-    a.addEventListener("click", () => a.dataset.goto && openDetail(a.dataset.goto));
 }
 
 async function renderTabSource(body, s) {
@@ -387,7 +458,13 @@ function diffItemHtml(c) {
   }
 }
 
-function renderTabHistory(body, s, { lockEntry, change }) {
+function renderTabHistory(body, g, s) {
+  // Prefer the install that actually changed; identical copies share
+  // content but may be locked under different keys.
+  const changedInstall = g.installs.find((inst) => model.changeByKey.has(lockKeyOf(inst))) ?? s;
+  const change = model.changeByKey.get(lockKeyOf(changedInstall));
+  const lockEntry = data.lock?.skills?.[lockKeyOf(changedInstall)] ?? data.lock?.skills?.[lockKeyOf(s)];
+
   let html = "";
   if (!data.lock) {
     html = `<div class="empty-hint">No <code>skills.lock</code> in ${esc(data.cwd)} yet. Run <code>typecase lock</code> to pin every installed skill, then this tab shows what changed and why it matters.</div>`;
@@ -424,10 +501,27 @@ function renderTabHistory(body, s, { lockEntry, change }) {
   body.innerHTML = html;
 }
 
+/* ---------- content: one delegated listener ---------- */
+
+$("#content").addEventListener("click", (e) => {
+  const action = e.target.closest("[data-action]");
+  if (action) {
+    const kind = action.dataset.action;
+    if (kind === "back") closeDetail();
+    else if (kind === "toggle-fm") { state.showFrontmatter = !state.showFrontmatter; renderContent(); }
+    else if (kind === "reveal") window.typecase.reveal(action.dataset.path);
+    else if (kind === "editor") window.typecase.openEditor(action.dataset.dir);
+    else if (kind === "goto" && action.dataset.key) openDetail(action.dataset.key);
+    return;
+  }
+  const rowEl = e.target.closest(".skill-row");
+  if (rowEl) openDetail(rowEl.dataset.key, rowEl.querySelector(".r-name"));
+});
+
 /* ---------- keyboard ---------- */
 
 function moveFocus(delta) {
-  const rows = [...document.querySelectorAll("#rows .skill-row")];
+  const rows = [...document.querySelectorAll("#rows .skill-row:not([hidden])")];
   if (!rows.length) return;
   state.focusIndex = Math.max(0, Math.min(rows.length - 1, (state.focusIndex < 0 ? 0 : state.focusIndex + delta)));
   rows.forEach((r, i) => r.classList.toggle("focused", i === state.focusIndex));
@@ -454,8 +548,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); moveFocus(1); }
   else if (e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); moveFocus(-1); }
   else if (e.key === "Enter" && state.focusIndex >= 0) {
-    const row = document.querySelectorAll("#rows .skill-row")[state.focusIndex];
-    if (row) openDetail(row.dataset.key, row.querySelector(".r-name"));
+    const rowEl = document.querySelectorAll("#rows .skill-row:not([hidden])")[state.focusIndex];
+    if (rowEl) openDetail(rowEl.dataset.key, rowEl.querySelector(".r-name"));
   }
 });
 
@@ -473,35 +567,37 @@ function openPalette() {
 function closePalette() { $("#palette-backdrop").hidden = true; }
 
 function paletteMatches(q) {
-  return data.skills
-    .filter((s) => !s.error)
-    .map((s) => ({ s, score: fuzzyScore(q, s) }))
+  return model.groups
+    .map((g) => ({ g, score: fuzzyScore(q, g.rep) }))
     .filter((x) => x.score >= 0)
-    .sort((a, b) => b.score - a.score || a.s.name.localeCompare(b.s.name))
+    .sort((a, b) => b.score - a.score || a.g.rep.name.localeCompare(b.g.rep.name))
     .slice(0, 12);
 }
 
 function renderPalette(q) {
-  const results = $("#palette-results");
   const matches = paletteMatches(q);
   paletteSel = Math.min(paletteSel, Math.max(0, matches.length - 1));
-  results.replaceChildren(...matches.map((m, i) => {
-    const d = document.createElement("div");
-    d.className = "palette-row" + (i === paletteSel ? " selected" : "");
-    d.innerHTML = `<span class="name">${esc(m.s.name)}</span><span class="d">${esc(m.s.description ?? "")}</span><span class="t">${esc(toolLabel(m.s.tool))} · ${esc(m.s.scope)}</span>`;
-    d.addEventListener("click", () => { closePalette(); openDetail(keyOf(m.s)); });
-    results.appendChild(d);
-    return d;
-  }));
+  $("#palette-results").innerHTML = matches.map((m, i) => `
+    <div class="palette-row${i === paletteSel ? " selected" : ""}" data-key="${esc(m.g.key)}">
+      <span class="name">${esc(m.g.rep.name)}</span>
+      <span class="d">${esc(m.g.rep.description ?? "")}</span>
+      <span class="t">${esc(toolLabel(m.g.rep.tool))} · ${esc(m.g.rep.scope)}</span>
+    </div>`).join("");
 }
 
+$("#palette-results").addEventListener("click", (e) => {
+  const rowEl = e.target.closest(".palette-row");
+  if (!rowEl) return;
+  closePalette();
+  openDetail(rowEl.dataset.key);
+});
 $("#palette-input").addEventListener("input", (e) => { paletteSel = 0; renderPalette(e.target.value); });
 $("#palette-input").addEventListener("keydown", (e) => {
   const matches = paletteMatches(e.target.value);
   if (e.key === "Escape") closePalette();
   else if (e.key === "ArrowDown") { e.preventDefault(); paletteSel = Math.min(paletteSel + 1, matches.length - 1); renderPalette(e.target.value); }
   else if (e.key === "ArrowUp") { e.preventDefault(); paletteSel = Math.max(paletteSel - 1, 0); renderPalette(e.target.value); }
-  else if (e.key === "Enter" && matches[paletteSel]) { closePalette(); openDetail(keyOf(matches[paletteSel].s)); }
+  else if (e.key === "Enter" && matches[paletteSel]) { closePalette(); openDetail(matches[paletteSel].g.key); }
 });
 $("#palette-backdrop").addEventListener("click", (e) => { if (e.target.id === "palette-backdrop") closePalette(); });
 
@@ -509,20 +605,20 @@ $("#palette-backdrop").addEventListener("click", (e) => { if (e.target.id === "p
 
 function setTab(tab) {
   state.tab = tab;
-  render();
+  renderContent();
 }
 
 $("#toggle-sidebar").addEventListener("click", () => $("#app").classList.toggle("sidebar-hidden"));
 $("#density-btn").addEventListener("click", () => {
   state.density = state.density === "cozy" ? "compact" : "cozy";
   $("#density-btn").classList.toggle("active", state.density === "compact");
-  render();
+  $("#rows")?.classList.toggle("compact", state.density === "compact");
 });
 for (const b of document.querySelectorAll(".chip"))
   b.addEventListener("click", () => {
     state.chips[b.dataset.chip] = !state.chips[b.dataset.chip];
     b.classList.toggle("active", state.chips[b.dataset.chip]);
-    render();
+    renderContent();
   });
 $("#theme-btn").addEventListener("click", () => {
   const order = ["system", "light", "dark"];
@@ -535,21 +631,34 @@ for (const b of document.querySelectorAll("#segmented button"))
 
 /* ---------- render root ---------- */
 
-function render() {
-  renderSidebar();
+function renderContent() {
+  const t0 = performance.now();
   if (state.view === "detail") renderDetail();
   else renderRows();
+  const stats = (window.__renderStats ??= { count: 0, lastMs: 0 });
+  stats.count++;
+  stats.lastMs = performance.now() - t0;
 }
 
 async function load() {
+  const t0 = performance.now();
   data = await window.typecase.data();
+  const t1 = performance.now();
   if (data.platform === "darwin") document.body.classList.add("mac");
-  render();
+  model = buildModel();
+  rowsCache = null;
+  renderSidebar();
+  renderContent();
+  const t2 = performance.now();
+  window.__perf = { ipcMs: t1 - t0, firstRenderMs: t2 - t1 };
 }
 
 window.typecase.onSkillsChanged(async () => {
   data = await window.typecase.data();
-  render();
+  model = buildModel();
+  rowsCache = null;
+  renderSidebar();
+  renderContent();
 });
 
 applyTheme();

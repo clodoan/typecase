@@ -18,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const libURL = app.isPackaged
   ? pathToFileURL(path.join(process.resourcesPath, "lib") + path.sep)
   : new URL("../scripts/lib/", import.meta.url);
-const { discover } = await import(new URL("discover.mjs", libURL).href);
+const { discover, displayGroups } = await import(new URL("discover.mjs", libURL).href);
 const { readLock, diffAgainstLock, LOCKFILE, CHANGELOG } = await import(new URL("lockfile.mjs", libURL).href);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -35,7 +35,12 @@ function collectData() {
   const changes = lock ? diffAgainstLock(lock, data) : [];
   const changelogPath = path.join(workdir, CHANGELOG);
   const changelog = existsSync(changelogPath) ? readFileSync(changelogPath, "utf8") : "";
-  return { ...data, lock, lockPath, changes, changelog, platform: process.platform };
+  return {
+    ...data,
+    displayGroups: displayGroups(data.skills),
+    lock, lockPath, changes, changelog,
+    platform: process.platform,
+  };
 }
 
 function watchRoots(data) {
