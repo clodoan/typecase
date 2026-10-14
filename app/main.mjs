@@ -65,7 +65,7 @@ function createWindow() {
     minWidth: 920,
     minHeight: 600,
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#151417" : "#f3f2f0",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#161618" : "#f5f5f7",
     titleBarStyle: isMac ? "hiddenInset" : "hidden",
     trafficLightPosition: { x: 20, y: 18 },
     ...(isMac ? { vibrancy: "sidebar", visualEffectState: "active" } : {}),

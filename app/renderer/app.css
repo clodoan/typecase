@@ -1,8 +1,8 @@
 /* Typecase — Pica-inspired structure, own identity. */
 
-/* Typecase design language: paper and ink, one verdigris accent.
-   Rubric red is reserved for risky flags. Light and dark follow the
-   system; there is no third canvas theme. */
+/* Typecase design language: neutral macOS-like light and dark canvases,
+   one verdigris accent. Rubric red is reserved for risky flags. Light
+   and dark follow the system; there is no third canvas theme. */
 :root {
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -12,38 +12,38 @@
 }
 
 html[data-theme="light"] {
-  --canvas: #f3f2ef;
-  --panel: #fbfaf8;
+  --canvas: #f5f5f7;
+  --panel: #ffffff;
   --card: #ffffff;
-  --ink: #1b1a18;
-  --ink-2: #6e6a63;
-  --ink-3: #a09b92;
-  --hairline: rgba(27, 26, 24, 0.09);
-  --sidebar-bg: rgba(243, 242, 239, 0.72);
-  --hover: rgba(27, 26, 24, 0.05);
-  --active-row: rgba(27, 26, 24, 0.07);
-  --pill: rgba(255, 255, 255, 0.82);
-  --pill-border: rgba(27, 26, 24, 0.1);
-  --shadow: 0 1px 2px rgba(20, 18, 14, 0.05), 0 8px 28px rgba(20, 18, 14, 0.07);
-  --shadow-float: 0 2px 6px rgba(20, 18, 14, 0.08), 0 16px 44px rgba(20, 18, 14, 0.14);
+  --ink: #1d1d1f;
+  --ink-2: #6e6e73;
+  --ink-3: #a1a1a6;
+  --hairline: rgba(0, 0, 0, 0.08);
+  --sidebar-bg: rgba(245, 245, 247, 0.72);
+  --hover: rgba(0, 0, 0, 0.04);
+  --active-row: rgba(0, 0, 0, 0.07);
+  --pill: rgba(255, 255, 255, 0.85);
+  --pill-border: rgba(0, 0, 0, 0.08);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 28px rgba(0, 0, 0, 0.07);
+  --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.08), 0 16px 44px rgba(0, 0, 0, 0.14);
   --danger: #c2372c;
   --warn-bg: rgba(194, 55, 44, 0.09);
   color-scheme: light;
 }
 
 html[data-theme="dark"] {
-  --canvas: #151417;
-  --panel: #1c1b1f;
-  --card: #232226;
-  --ink: #f0eeea;
-  --ink-2: #9b978f;
-  --ink-3: #6b675f;
-  --hairline: rgba(240, 238, 234, 0.09);
-  --sidebar-bg: rgba(21, 20, 23, 0.62);
-  --hover: rgba(240, 238, 234, 0.06);
-  --active-row: rgba(240, 238, 234, 0.09);
-  --pill: rgba(38, 37, 41, 0.86);
-  --pill-border: rgba(240, 238, 234, 0.1);
+  --canvas: #161618;
+  --panel: #1d1d1f;
+  --card: #242426;
+  --ink: #f2f2f3;
+  --ink-2: #98989d;
+  --ink-3: #68686d;
+  --hairline: rgba(255, 255, 255, 0.09);
+  --sidebar-bg: rgba(22, 22, 24, 0.62);
+  --hover: rgba(255, 255, 255, 0.06);
+  --active-row: rgba(255, 255, 255, 0.09);
+  --pill: rgba(40, 40, 42, 0.86);
+  --pill-border: rgba(255, 255, 255, 0.1);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 28px rgba(0, 0, 0, 0.36);
   --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.4), 0 16px 44px rgba(0, 0, 0, 0.5);
   --accent: #2aa18f;
