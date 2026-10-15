@@ -23,12 +23,10 @@ const cx = (...xs) => stylex.attrs(...xs).class ?? "";
 /* Static class strings, computed once. */
 const C = {
   navHeading: cx(styles.navHeading),
-  navItem: cx(styles.navItem),
-  navItemActive: cx(styles.navItem, styles.navItemActive),
-  navItemActiveSpecial: cx(styles.navItem, styles.navItemActive, styles.navItemActiveSpecial),
+  navItem: cx(styles.navItem, styles.item),
+  navItemActive: cx(styles.navItem, styles.item, styles.itemActive),
   navLabel: cx(styles.navLabel),
   navCount: cx(styles.navCount),
-  navCountActiveSpecial: cx(styles.navCount, styles.navCountActiveSpecial),
   navIcon: cx(styles.navIcon),
 
   countHead: cx(styles.countHead),
@@ -36,11 +34,8 @@ const C = {
   countSub: cx(styles.countHeadSub),
   rowsList: cx(styles.rowsList),
   skillRow: cx(styles.skillRow),
-  skillRowCompact: cx(styles.skillRow, styles.skillRowCompact),
   skillRowFocused: cx(styles.skillRow, styles.skillRowFocused),
-  skillRowCompactFocused: cx(styles.skillRow, styles.skillRowCompact, styles.skillRowFocused),
   rName: cx(styles.rName),
-  rNameCompact: cx(styles.rName, styles.rNameCompact),
   rDesc: cx(styles.rDesc),
   rBadges: cx(styles.rBadges),
   rTool: cx(styles.rTool),
@@ -48,8 +43,6 @@ const C = {
   rTok: cx(styles.rTok),
 
   badge: cx(styles.badge),
-  badgeRisky: cx(styles.badge, styles.badgeRisky),
-  badgeAccent: cx(styles.badge, styles.badgeAccent),
 
   detail: cx(styles.detail),
   detailTop: cx(styles.detailTop),
@@ -72,7 +65,6 @@ const C = {
   monoDim: cx(styles.monoDim),
   toolChips: cx(styles.toolChips),
   toolChip: cx(styles.toolChip),
-  toolChipRisky: cx(styles.toolChip, styles.toolChipRisky),
   pathRow: cx(styles.pathRow),
   miniBtn: cx(styles.miniBtn),
   linkSkill: cx(styles.linkSkill),
@@ -99,10 +91,9 @@ const C = {
   paletteTool: cx(styles.paletteTool),
   paletteToolSelected: cx(styles.paletteTool, styles.paletteToolSelected),
 
-  tbBtn: cx(styles.control, styles.controlIcon),
-  tbBtnActive: cx(styles.control, styles.controlIcon, styles.controlActive),
-  tab: cx(styles.control, styles.controlText),
-  tabActive: cx(styles.control, styles.controlText, styles.controlActive),
+  tbBtn: cx(styles.control, styles.controlIcon, styles.item),
+  tab: cx(styles.control, styles.controlText, styles.item),
+  tabActive: cx(styles.control, styles.controlText, styles.item, styles.itemActive),
 };
 
 const TOOLS = [
@@ -139,7 +130,6 @@ const state = {
   tool: null,
   scope: null,
   collection: null,     // root dir
-  density: "cozy",
   theme: localStorage.getItem("typecase-theme") || "system",
   view: "grid",         // grid | detail
   groupKey: null,
@@ -172,11 +162,10 @@ function applyShellStyles() {
   $("#toggle-sidebar").className = "tb-btn " + C.tbBtn;
   $("#back-group").className = "tb-group back-group " + cx(styles.backGroup);
   $("#back-btn").className = "tb-btn back-btn " + C.tbBtn;
-  $("#density-btn").className = "tb-btn " + (state.density === "compact" ? C.tbBtnActive : C.tbBtn);
   $("#theme-btn").className = "tb-btn " + C.tbBtn;
   for (const el of document.querySelectorAll(".tb-sep")) el.className = "tb-sep " + cx(styles.tbSep);
   document.querySelector(".tb-spacer").className = "tb-spacer " + cx(styles.tbSpacer);
-  $("#search-pill").className = "search-pill " + cx(styles.control, styles.controlText, styles.searchPill);
+  $("#search-pill").className = "search-pill " + cx(styles.control, styles.controlText, styles.item, styles.searchPill);
   $("#search-pill kbd").className = cx(styles.searchKbd);
   $("#content").className = "content " + cx(styles.content);
   $("#segmented").className = "tb-tabs " + cx(styles.tbTabs);
@@ -249,8 +238,8 @@ function buildModel() {
       installs,
       copies: installs.length,
       changed: installs.some((s) => changedKeys.has(lockKeyOf(s))),
-      overlap: installs.some((s) => overlapPaths.has(s.path)),
-      collision: collisionNames.has(rep.name),
+      // A name clash with different content counts as an overlap too.
+      overlap: installs.some((s) => overlapPaths.has(s.path)) || collisionNames.has(rep.name),
       risky: rep.riskyTools.length > 0,
       tools: [...new Set(installs.map((s) => s.tool))],
       scopes: [...new Set(installs.map((s) => s.scope))],
@@ -313,8 +302,8 @@ function fuzzyScore(query, s) {
 
 /* ---------- sidebar: built once per payload, active state synced ---------- */
 
-function navButton({ nav, icon, label, count, special }) {
-  return `<button class="nav-item ${C.navItem}" data-nav="${esc(nav)}"${special ? ' data-special="1"' : ""}>
+function navButton({ nav, icon, label, count }) {
+  return `<button class="nav-item ${C.navItem}" data-nav="${esc(nav)}">
     <span class="${C.navIcon}">${icon ?? ""}</span><span class="${C.navLabel}">${esc(label)}</span>${count != null ? `<span class="count ${C.navCount}">${count}</span>` : ""}
   </button>`;
 }
@@ -325,11 +314,11 @@ function renderSidebar() {
   const lib = [
     { id: "all", label: "All Skills", count: counts.all },
     { id: "active", label: "Active", count: counts.all },
-    { id: "changed", label: "Changed since lock", count: counts.changed, special: true },
-    { id: "overlaps", label: "Overlaps", count: counts.overlaps, special: true },
+    { id: "changed", label: "Changed since lock", count: counts.changed },
+    { id: "overlaps", label: "Overlaps", count: counts.overlaps },
   ];
   for (const l of lib) {
-    html += navButton({ nav: `lib:${l.id}`, icon: LIB_ICONS[l.id], label: l.label, count: l.count, special: l.special });
+    html += navButton({ nav: `lib:${l.id}`, icon: LIB_ICONS[l.id], label: l.label, count: l.count });
   }
 
   html += `<div class="nav-heading ${C.navHeading}">Tools</div>`;
@@ -363,10 +352,7 @@ function syncSidebar() {
     else if (kind === "tool") active = state.tool === id;
     else if (kind === "root") active = state.collection === id;
     else if (kind === "scope") active = state.scope === id;
-    const special = el.dataset.special === "1";
-    el.className = "nav-item " + (active ? (special ? C.navItemActiveSpecial : C.navItemActive) : C.navItem);
-    const countEl = el.querySelector(".count");
-    if (countEl) countEl.className = "count " + (active && special ? C.navCountActiveSpecial : C.navCount);
+    el.className = "nav-item " + (active ? C.navItemActive : C.navItem);
   }
 }
 
@@ -391,20 +377,14 @@ function toolLabel(id) { return TOOLS.find((t) => t.id === id)?.label ?? id; }
 function badgesHtml(g) {
   const out = [];
   if (g.copies > 1) out.push(`<span class="badge copies ${C.badge}">×${g.copies}</span>`);
-  if (g.risky) out.push(`<span class="badge risky ${C.badgeRisky}">risky</span>`);
-  if (g.collision) out.push(`<span class="badge dup ${C.badgeAccent}">dup</span>`);
-  else if (g.overlap) out.push(`<span class="badge overlap ${C.badgeAccent}">overlap</span>`);
-  if (g.changed) out.push(`<span class="badge changed ${C.badgeAccent}">changed</span>`);
+  if (g.risky) out.push(`<span class="badge risky ${C.badge}">risky</span>`);
+  if (g.overlap) out.push(`<span class="badge overlap ${C.badge}">overlap</span>`);
+  if (g.changed) out.push(`<span class="badge changed ${C.badge}">changed</span>`);
   return out.join("");
 }
 
-function rowClass(focused) {
-  const compact = state.density === "compact";
-  return "skill-row " + (compact
-    ? (focused ? C.skillRowCompactFocused : C.skillRowCompact)
-    : (focused ? C.skillRowFocused : C.skillRow));
-}
-const rNameClass = () => "r-name " + (state.density === "compact" ? C.rNameCompact : C.rName);
+const rowClass = (focused) => "skill-row " + (focused ? C.skillRowFocused : C.skillRow);
+const rNameClass = () => "r-name " + C.rName;
 
 /* Row elements are built ONCE per data payload; filtering and
    navigation toggle visibility on the cached nodes instead of
@@ -550,11 +530,11 @@ function renderTabRendered(body, g, s) {
   const whenUse = s.sections.find((x) => /when to use|^use/i.test(x.heading))?.text ?? "";
   const toolChips = s.commands.map((c) => {
     const risky = s.riskyTools.some((r) => c.includes(r) || r.includes(c.split(/\s/)[0]));
-    return `<span class="${risky ? C.toolChipRisky : C.toolChip}">${esc(c)}${risky ? " ⚠" : ""}</span>`;
+    return `<span class="${C.toolChip}">${esc(c)}${risky ? " ⚠" : ""}</span>`;
   }).join("");
   const riskyOnly = s.riskyTools
     .filter((r) => !s.commands.some((c) => c.includes(r)))
-    .map((r) => `<span class="${C.toolChipRisky}">${esc(r)} ⚠</span>`).join("");
+    .map((r) => `<span class="${C.toolChip}">${esc(r)} ⚠</span>`).join("");
   const myOverlaps = g.installs.flatMap((inst) => model.overlapsBySkillPath.get(inst.path) ?? []);
   const overlapLinks = myOverlaps.map((o) => {
     const other = g.installs.some((inst) => inst.path === o.a.path) ? o.b : o.a;
@@ -745,40 +725,73 @@ function openPalette() {
 }
 function closePalette() { $("#palette-backdrop").hidden = true; }
 
+/* Commands sit above skills when the query matches their keywords
+   (every query word must start a keyword). */
+const COMMANDS = [
+  { theme: "light", name: "Light theme", desc: "Switch to the light appearance" },
+  { theme: "dark", name: "Dark theme", desc: "Switch to the dark appearance" },
+  { theme: "system", name: "System theme", desc: "Follow the macOS appearance" },
+].map((c) => ({
+  ...c,
+  keywords: `${c.theme} theme appearance mode color`.split(" "),
+  run: () => setTheme(c.theme),
+}));
+
+function commandMatches(q) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  return COMMANDS
+    .filter((c) => words.every((w) => c.keywords.some((k) => k.startsWith(w))))
+    .map((c) => ({ name: c.name, desc: c.desc, meta: state.theme === c.theme ? "Theme · current" : "Theme", run: c.run }));
+}
+
+/** Palette results: matching commands first, then up to 12 skills. */
 function paletteMatches(q) {
-  return model.groups
+  const skills = model.groups
     .map((g) => ({ g, score: fuzzyScore(q, g.rep) }))
     .filter((x) => x.score >= 0)
     .sort((a, b) => b.score - a.score || a.g.rep.name.localeCompare(b.g.rep.name))
-    .slice(0, 12);
+    .slice(0, 12)
+    .map(({ g }) => ({
+      name: g.rep.name,
+      desc: g.rep.description ?? "",
+      meta: `${toolLabel(g.rep.tool)} · ${g.rep.scope}`,
+      run: () => openDetail(g.key),
+    }));
+  return [...commandMatches(q), ...skills];
 }
 
+let paletteItems = [];
 function renderPalette(q) {
-  const matches = paletteMatches(q);
-  paletteSel = Math.min(paletteSel, Math.max(0, matches.length - 1));
-  $("#palette-results").innerHTML = matches.map((m, i) => {
+  paletteItems = paletteMatches(q);
+  paletteSel = Math.min(paletteSel, Math.max(0, paletteItems.length - 1));
+  $("#palette-results").innerHTML = paletteItems.map((m, i) => {
     const sel = i === paletteSel;
-    return `<div class="palette-row${sel ? " selected" : ""} ${sel ? C.paletteRowSelected : C.paletteRow}" data-key="${esc(m.g.key)}">
-      <span class="name ${C.paletteName}">${esc(m.g.rep.name)}</span>
-      <span class="d ${sel ? C.paletteDescSelected : C.paletteDesc}">${esc(m.g.rep.description ?? "")}</span>
-      <span class="t ${sel ? C.paletteToolSelected : C.paletteTool}">${esc(toolLabel(m.g.rep.tool))} · ${esc(m.g.rep.scope)}</span>
+    return `<div class="palette-row${sel ? " selected" : ""} ${sel ? C.paletteRowSelected : C.paletteRow}" data-index="${i}">
+      <span class="name ${C.paletteName}">${esc(m.name)}</span>
+      <span class="d ${sel ? C.paletteDescSelected : C.paletteDesc}">${esc(m.desc)}</span>
+      <span class="t ${sel ? C.paletteToolSelected : C.paletteTool}">${esc(m.meta)}</span>
     </div>`;
   }).join("");
 }
 
+function runPaletteItem(i) {
+  const item = paletteItems[i];
+  if (!item) return;
+  closePalette();
+  item.run();
+}
+
 $("#palette-results").addEventListener("click", (e) => {
   const rowEl = e.target.closest(".palette-row");
-  if (!rowEl) return;
-  closePalette();
-  openDetail(rowEl.dataset.key);
+  if (rowEl) runPaletteItem(Number(rowEl.dataset.index));
 });
 $("#palette-input").addEventListener("input", (e) => { paletteSel = 0; renderPalette(e.target.value); });
 $("#palette-input").addEventListener("keydown", (e) => {
-  const matches = paletteMatches(e.target.value);
   if (e.key === "Escape") closePalette();
-  else if (e.key === "ArrowDown") { e.preventDefault(); paletteSel = Math.min(paletteSel + 1, matches.length - 1); renderPalette(e.target.value); }
+  else if (e.key === "ArrowDown") { e.preventDefault(); paletteSel = Math.min(paletteSel + 1, paletteItems.length - 1); renderPalette(e.target.value); }
   else if (e.key === "ArrowUp") { e.preventDefault(); paletteSel = Math.max(paletteSel - 1, 0); renderPalette(e.target.value); }
-  else if (e.key === "Enter" && matches[paletteSel]) { closePalette(); openDetail(matches[paletteSel].g.key); }
+  else if (e.key === "Enter") runPaletteItem(paletteSel);
 });
 $("#palette-backdrop").addEventListener("click", (e) => { if (e.target.id === "palette-backdrop") closePalette(); });
 
@@ -794,22 +807,12 @@ $("#toggle-sidebar").addEventListener("click", () => {
   $("#sidebar").className = "sidebar " + cx(styles.sidebar, sidebarHidden && styles.sidebarHidden);
   syncToolbar();
 });
-$("#density-btn").addEventListener("click", () => {
-  state.density = state.density === "cozy" ? "compact" : "cozy";
-  state.focusIndex = -1;
-  $("#density-btn").className = "tb-btn " + (state.density === "compact" ? C.tbBtnActive : C.tbBtn);
-  if (rowsCache) {
-    for (const el of rowsCache.byKey.values()) {
-      el.className = rowClass(false);
-      el.querySelector(".r-name").className = rNameClass();
-    }
-  }
-});
-$("#theme-btn").addEventListener("click", () => {
-  const order = ["system", "light", "dark"];
-  state.theme = order[(order.indexOf(state.theme) + 1) % order.length];
+function setTheme(theme) {
+  state.theme = theme;
   applyTheme();
-});
+}
+const THEME_ORDER = ["system", "light", "dark"];
+$("#theme-btn").addEventListener("click", () => setTheme(THEME_ORDER[(THEME_ORDER.indexOf(state.theme) + 1) % THEME_ORDER.length]));
 $("#search-pill").addEventListener("click", openPalette);
 $("#back-btn").addEventListener("click", closeDetail);
 for (const b of document.querySelectorAll("#segmented button"))

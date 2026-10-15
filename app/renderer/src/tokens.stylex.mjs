@@ -1,7 +1,7 @@
 /* Typecase design tokens. Defaults are the LIGHT theme (neutral
    macOS-like: #f5f5f7 canvas, white panel/card, neutral gray inks and
    hairlines); themes.mjs overrides them for dark. One verdigris
-   accent; rubric red is reserved for risky flags. */
+   accent; rubric red marks removals in the History diff. */
 
 import * as stylex from "@stylexjs/stylex";
 
@@ -32,6 +32,5 @@ export const vars = stylex.defineVars({
   accent: "#0e7a6b",
   accentInk: "#ffffff",
   danger: "#c2372c",
-  warnBg: "rgba(194, 55, 44, 0.09)",
   added: "#35a46c",
 });

@@ -45,6 +45,17 @@ export const styles = stylex.create({
     color: vars.ink3,
     padding: "14px 14px 5px",
   },
+  /* Interaction states shared by every sidebar and toolbar item. Active is
+     a fill and color change only, so labels never change width. */
+  item: {
+    backgroundColor: { default: "transparent", ":hover": vars.hover },
+    color: { default: vars.ink2, ":hover": vars.ink },
+  },
+  itemActive: {
+    backgroundColor: { default: vars.activeRow, ":hover": vars.activeRow },
+    color: { default: vars.ink, ":hover": vars.ink },
+  },
+
   navItem: {
     display: "flex",
     alignItems: "center",
@@ -53,19 +64,14 @@ export const styles = stylex.create({
     padding: "5px 14px",
     borderStyle: "none", borderWidth: 0,
     borderRadius: vars.radiusInset,
-    backgroundColor: { default: "transparent", ":hover": vars.hover },
-    color: vars.ink,
     fontFamily: "inherit",
     fontSize: "inherit",
     textAlign: "left",
     cursor: "default",
   },
-  navItemActive: { backgroundColor: { default: vars.activeRow, ":hover": vars.activeRow }, fontWeight: 500 },
-  navItemActiveSpecial: { backgroundColor: { default: vars.accent, ":hover": vars.accent }, color: vars.accentInk },
   navLabel: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 },
   navCount: { marginLeft: "auto", color: vars.ink3, fontSize: "11px", fontVariantNumeric: "tabular-nums" },
-  navCountActiveSpecial: { color: vars.accentInk, opacity: 0.7 },
-  navIcon: { display: "inline-flex", flex: "none", opacity: 0.75 },
+  navIcon: { display: "inline-flex", flex: "none" },
 
   /* ---- Main panel ---- */
   main: {
@@ -106,7 +112,8 @@ export const styles = stylex.create({
   // Sidebar hidden on macOS: clear the traffic lights (they end at x≈80).
   toolbarBesideLights: { paddingLeft: "84px" },
   /* One control shape for everything in the toolbar: icon buttons, the
-     detail tabs, and the search field all share height, radius, colors. */
+     detail tabs, and the search field share height and radius; colors come
+     from item / itemActive. */
   control: {
     display: "inline-flex",
     alignItems: "center",
@@ -114,16 +121,12 @@ export const styles = stylex.create({
     height: "28px",
     borderStyle: "none", borderWidth: 0,
     borderRadius: vars.radiusControl,
-    backgroundColor: { default: "transparent", ":hover": vars.hover },
-    color: { default: vars.ink2, ":hover": vars.ink },
     fontFamily: "inherit",
     fontSize: "12px",
     cursor: "default",
   },
   controlIcon: { width: "28px" },
   controlText: { padding: "0 10px" },
-  // Color only: a weight change would resize the label and shift its neighbors.
-  controlActive: { backgroundColor: { default: vars.activeRow, ":hover": vars.activeRow }, color: { default: vars.ink, ":hover": vars.ink } },
   tbSep: { width: "1px", height: "16px", backgroundColor: vars.hairline, margin: "0 2px" },
   backGroup: { display: "flex", alignItems: "center", gap: "6px" },
   // Centered on the toolbar, independent of what sits on either side.
@@ -156,7 +159,6 @@ export const styles = stylex.create({
     outline: "none",
     backgroundColor: { default: null, ":hover": vars.hover, ":focus-visible": vars.activeRow },
   },
-  skillRowCompact: { padding: "5px 10px" },
   skillRowFocused: { backgroundColor: { default: vars.activeRow, ":hover": vars.activeRow } },
   rName: {
     flex: "none",
@@ -168,7 +170,6 @@ export const styles = stylex.create({
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
-  rNameCompact: { fontSize: "12px" },
   rDesc: {
     flex: 1,
     minWidth: 0,
@@ -209,8 +210,6 @@ export const styles = stylex.create({
     backgroundColor: vars.activeRow,
     color: vars.ink2,
   },
-  badgeRisky: { backgroundColor: vars.warnBg, color: vars.danger },
-  badgeAccent: { backgroundColor: vars.accent, color: vars.accentInk }, // dup / overlap / changed
 
   /* ---- Detail view ---- */
   detail: { maxWidth: "760px", margin: "0 auto" },
@@ -278,7 +277,6 @@ export const styles = stylex.create({
     backgroundColor: vars.activeRow,
     color: vars.ink2,
   },
-  toolChipRisky: { backgroundColor: vars.warnBg, color: vars.danger, fontWeight: 600 },
 
   pathRow: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", padding: "1px 0" },
   miniBtn: {

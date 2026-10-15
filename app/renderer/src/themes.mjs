@@ -21,6 +21,5 @@ export const darkTheme = stylex.createTheme(vars, {
   accent: "#2aa18f",
   accentInk: "#06211c",
   danger: "#ef6a5e",
-  warnBg: "rgba(239, 106, 94, 0.13)",
   added: "#35a46c",
 });
