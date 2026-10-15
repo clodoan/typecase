@@ -146,8 +146,8 @@ on any failure it falls back to the deterministic text.
 
 ## The desktop app
 
-`typecase open` launches a Mac-first Electron reader (translucent sidebar
-vibrancy, system font, light and dark themes that follow the system,
+`typecase open` launches a Mac-first Electron reader (floating sidebar,
+system font, light and dark themes that follow the system,
 full keyboard navigation, ⌘K search). The palette is neutral macOS gray —
 `#f5f5f7` canvas with white panels in light, near-black in dark — with a
 single verdigris accent; rubric red is reserved for risky flags. Styling
@@ -180,6 +180,11 @@ changes on disk.
   **Rendered / Source / History** (keys 1–3) — History shows the locked version,
   the since-lock paragraph with a section-level diff, and this skill's
   `TYPECASE.md` entries.
+- **Keyboard** — ⌘K search, ⌘\\ sidebar, ⌘[ / ⌘] back and forward
+  through the skills and filters you visited (scroll position included),
+  arrows + ↩ on the list, Esc and 1–3 on a skill. Every shortcut is
+  declared in [`app/renderer/src/shortcuts.mjs`](app/renderer/src/shortcuts.mjs);
+  add one there and give `app.js` an action with the same id.
 
 <img src="assets/app-history-light.png" alt="History tab showing a real since-lock diff of the frontend-design skill" width="100%" />
 <img src="assets/app-search-light.png" alt="Command-K fuzzy search palette" width="100%" />

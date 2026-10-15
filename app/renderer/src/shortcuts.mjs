@@ -1,0 +1,78 @@
+/* Every app-wide keyboard shortcut, in one table. To add or change one,
+   edit SHORTCUTS and give app.js an action with the same id.
+
+   keys   one or more combos: "mod+k", "mod+[", "escape", "1", "arrowdown".
+          mod is ⌘ on macOS and Ctrl elsewhere; shift / alt also work.
+   scope  where it fires:
+            global  always, even while the ⌘K palette is open
+            app     anywhere the palette is closed (default)
+            list    on the skill list
+            detail  on a skill's detail view
+   Shortcuts other than global ones never fire while typing in a field.
+   Keys inside the palette (arrows, Enter, Esc) belong to the palette. */
+
+export const SHORTCUTS = [
+  { id: "search", keys: ["mod+k"], label: "Search skills and commands", scope: "global" },
+  { id: "toggleSidebar", keys: ["mod+\\"], label: "Toggle sidebar" },
+  { id: "back", keys: ["mod+["], label: "Back" },
+  { id: "forward", keys: ["mod+]"], label: "Forward" },
+  { id: "nextRow", keys: ["arrowdown", "arrowright"], label: "Next skill", scope: "list" },
+  { id: "prevRow", keys: ["arrowup", "arrowleft"], label: "Previous skill", scope: "list" },
+  { id: "openRow", keys: ["enter"], label: "Open skill", scope: "list" },
+  { id: "closeSkill", keys: ["escape"], label: "Close skill", scope: "detail" },
+  { id: "tabRendered", keys: ["1"], label: "Rendered tab", scope: "detail" },
+  { id: "tabSource", keys: ["2"], label: "Source tab", scope: "detail" },
+  { id: "tabHistory", keys: ["3"], label: "History tab", scope: "detail" },
+];
+
+const IS_MAC = /Mac/.test(navigator.userAgent);
+// Physical-key fallback so bracket shortcuts survive non-US layouts.
+const CODE_KEYS = { BracketLeft: "[", BracketRight: "]", Backslash: "\\" };
+const SYMBOLS = { mod: IS_MAC ? "⌘" : "Ctrl+", shift: "⇧", alt: IS_MAC ? "⌥" : "Alt+", escape: "Esc", enter: "↩" };
+
+function parse(combo) {
+  const parts = combo.toLowerCase().split("+");
+  const key = parts.pop();
+  return { key, mod: parts.includes("mod"), shift: parts.includes("shift"), alt: parts.includes("alt") };
+}
+
+function matches(combo, e) {
+  const c = parse(combo);
+  const mod = IS_MAC ? e.metaKey : e.ctrlKey;
+  if (c.mod !== mod || c.alt !== e.altKey || c.shift !== e.shiftKey) return false;
+  const key = e.key.toLowerCase();
+  return key === c.key || CODE_KEYS[e.code] === c.key;
+}
+
+/** Display text for a shortcut id, e.g. "⌘[" — for tooltips and hints. */
+export function shortcutText(id) {
+  const s = SHORTCUTS.find((x) => x.id === id);
+  if (!s) return "";
+  const c = parse(s.keys[0]);
+  const mods = ["mod", "alt", "shift"].filter((m) => c[m]).map((m) => SYMBOLS[m]).join("");
+  return mods + (SYMBOLS[c.key] ?? c.key.toUpperCase());
+}
+
+/**
+ * Install the single document keydown listener.
+ *   actions   { [id]: (event) => void | false }  return false to let the key through
+ *   scope     () => "palette" | "list" | "detail"  where the user is right now
+ */
+export function installShortcuts({ actions, scope }) {
+  for (const s of SHORTCUTS) if (!actions[s.id]) throw new Error(`No action for shortcut "${s.id}"`);
+  document.addEventListener("keydown", (e) => {
+    const where = scope();
+    const typing = e.target instanceof HTMLElement && e.target.matches("input, textarea, [contenteditable]");
+    for (const s of SHORTCUTS) {
+      const sScope = s.scope ?? "app";
+      if (sScope !== "global") {
+        if (where === "palette" || typing) continue;
+        if (sScope !== "app" && sScope !== where) continue;
+      }
+      if (!s.keys.some((k) => matches(k, e))) continue;
+      if (actions[s.id](e) === false) return;
+      e.preventDefault();
+      return;
+    }
+  });
+}

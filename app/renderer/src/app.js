@@ -15,6 +15,7 @@
 import * as stylex from "@stylexjs/stylex";
 
 import { HEADING_ID_PREFIX, MARKDOWN_ROOT, renderSkillMarkdown } from "./markdown.mjs";
+import { installShortcuts, shortcutText } from "./shortcuts.mjs";
 import { styles } from "./styles.mjs";
 import { darkTheme } from "./themes.mjs";
 
@@ -150,7 +151,7 @@ let isMac = false;
 let sidebarHidden = false;
 
 function applyShellStyles() {
-  document.body.className = cx(styles.body, isMac && styles.bodyMac);
+  document.body.className = cx(styles.body);
   $("#app").className = "app " + cx(styles.app);
   $("#sidebar").className = "sidebar " + cx(styles.sidebar, sidebarHidden && styles.sidebarHidden);
   document.querySelector(".app-drag").className = "app-drag " + cx(styles.appDrag);
@@ -160,6 +161,9 @@ function applyShellStyles() {
   $("#main-drag").className = "main-drag " + cx(styles.mainDrag);
   syncToolbar();
   $("#toggle-sidebar").className = "tb-btn " + C.tbBtn;
+  $("#toggle-sidebar").title = `Toggle sidebar (${shortcutText("toggleSidebar")})`;
+  $("#back-btn").title = `Back (${shortcutText("back")})`;
+  $("#search-pill kbd").textContent = shortcutText("search");
   $("#back-group").className = "tb-group back-group " + cx(styles.backGroup);
   $("#back-btn").className = "tb-btn back-btn " + C.tbBtn;
   $("#theme-btn").className = "tb-btn " + C.tbBtn;
@@ -361,13 +365,11 @@ $("#sidenav").addEventListener("click", (e) => {
   if (!item) return;
   const [kind, ...restParts] = item.dataset.nav.split(":");
   const id = restParts.join(":");
-  Object.assign(state, { view: "grid", groupKey: null, tab: "rendered", focusIndex: -1 });
-  if (kind === "lib") Object.assign(state, { library: id, tool: null, scope: null, collection: null });
-  else if (kind === "tool") Object.assign(state, { library: "all", tool: id, scope: null, collection: null });
-  else if (kind === "root") Object.assign(state, { library: "all", tool: null, scope: null, collection: id });
-  else if (kind === "scope") Object.assign(state, { library: "all", tool: null, scope: id, collection: null });
-  syncSidebar();
-  renderContent();
+  const list = { view: "grid", groupKey: null };
+  if (kind === "lib") navigate({ ...list, library: id, tool: null, scope: null, collection: null });
+  else if (kind === "tool") navigate({ ...list, library: "all", tool: id, scope: null, collection: null });
+  else if (kind === "root") navigate({ ...list, library: "all", tool: null, scope: null, collection: id });
+  else if (kind === "scope") navigate({ ...list, library: "all", tool: null, scope: id, collection: null });
 });
 
 /* ---------- rows ---------- */
@@ -460,17 +462,51 @@ function renderRows() {
 /* ---------- detail ---------- */
 
 function openDetail(key) {
-  state.view = "detail";
-  state.groupKey = key;
-  state.tab = "rendered";
-  state.showFrontmatter = false;
-  renderContent();
+  navigate({ view: "detail", groupKey: key });
 }
 
 function closeDetail() {
-  state.view = "grid";
-  state.groupKey = null;
+  navigate({ view: "grid", groupKey: null });
+}
+
+/* ---------- navigation history (⌘[ back, ⌘] forward) ----------
+   A location is the view, the open skill, and the sidebar filter. Each
+   history entry also keeps its scroll position for when you return. */
+
+const LOCATION_KEYS = ["view", "groupKey", "library", "tool", "scope", "collection"];
+const navHistory = { back: [], forward: [] };
+
+function currentLocation() {
+  const loc = Object.fromEntries(LOCATION_KEYS.map((k) => [k, state[k]]));
+  return { ...loc, scrollTop: $("#content").scrollTop };
+}
+
+function showLocation(loc) {
+  for (const k of LOCATION_KEYS) state[k] = loc[k];
+  Object.assign(state, { tab: "rendered", showFrontmatter: false, focusIndex: -1 });
+  syncSidebar();
   renderContent();
+  $("#content").scrollTop = loc.scrollTop ?? 0;
+}
+
+function navigate(changes) {
+  const from = currentLocation();
+  if (LOCATION_KEYS.every((k) => !(k in changes) || changes[k] === from[k])) return;
+  navHistory.back.push(from);
+  navHistory.forward = [];
+  showLocation({ ...from, ...changes, scrollTop: 0 });
+}
+
+function goBack() {
+  if (!navHistory.back.length) return;
+  navHistory.forward.push(currentLocation());
+  showLocation(navHistory.back.pop());
+}
+
+function goForward() {
+  if (!navHistory.forward.length) return;
+  navHistory.back.push(currentLocation());
+  showLocation(navHistory.forward.pop());
 }
 
 function row(label, valueHtml, muted = false) {
@@ -481,7 +517,13 @@ function row(label, valueHtml, muted = false) {
 
 function renderDetail() {
   const g = model.byKey.get(state.groupKey);
-  if (!g) { closeDetail(); return; }
+  if (!g) {
+    // The skill disappeared (files changed on disk): show the list instead.
+    state.view = "grid";
+    state.groupKey = null;
+    renderContent();
+    return;
+  }
   const s = repFor(g);
 
   $("#content").innerHTML = `<div class="detail ${C.detail}">
@@ -687,29 +729,23 @@ function moveFocus(delta) {
   rows[state.focusIndex].scrollIntoView({ block: "nearest" });
 }
 
-document.addEventListener("keydown", (e) => {
-  const paletteOpen = !$("#palette-backdrop").hidden;
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-    e.preventDefault();
-    paletteOpen ? closePalette() : openPalette();
-    return;
-  }
-  if (paletteOpen) return;
-  if ((e.metaKey || e.ctrlKey) && e.key === "\\") { e.preventDefault(); $("#toggle-sidebar").click(); return; }
-  if (state.view === "detail") {
-    if (e.key === "Escape") closeDetail();
-    if (e.key === "1") setTab("rendered");
-    if (e.key === "2") setTab("source");
-    if (e.key === "3") setTab("history");
-    return;
-  }
-  if (e.target.tagName === "INPUT") return;
-  if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); moveFocus(1); }
-  else if (e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); moveFocus(-1); }
-  else if (e.key === "Enter" && state.focusIndex >= 0) {
-    const rowEl = document.querySelectorAll("#rows .skill-row:not([hidden])")[state.focusIndex];
-    if (rowEl) openDetail(rowEl.dataset.key);
-  }
+/* Shortcut keys and scopes live in shortcuts.mjs; these are the actions. */
+const focusedRow = () => document.querySelectorAll("#rows .skill-row:not([hidden])")[state.focusIndex];
+installShortcuts({
+  scope: () => (!$("#palette-backdrop").hidden ? "palette" : state.view === "detail" ? "detail" : "list"),
+  actions: {
+    search: () => ($("#palette-backdrop").hidden ? openPalette() : closePalette()),
+    toggleSidebar: () => $("#toggle-sidebar").click(),
+    back: goBack,
+    forward: goForward,
+    nextRow: () => moveFocus(1),
+    prevRow: () => moveFocus(-1),
+    openRow: () => (focusedRow() ? openDetail(focusedRow().dataset.key) : false),
+    closeSkill: closeDetail,
+    tabRendered: () => setTab("rendered"),
+    tabSource: () => setTab("source"),
+    tabHistory: () => setTab("history"),
+  },
 });
 
 /* ---------- command palette ---------- */
@@ -773,6 +809,7 @@ function renderPalette(q) {
       <span class="t ${sel ? C.paletteToolSelected : C.paletteTool}">${esc(m.meta)}</span>
     </div>`;
   }).join("");
+  $("#palette-results .palette-row.selected")?.scrollIntoView({ block: "nearest" });
 }
 
 function runPaletteItem(i) {
@@ -788,7 +825,8 @@ $("#palette-results").addEventListener("click", (e) => {
 });
 $("#palette-input").addEventListener("input", (e) => { paletteSel = 0; renderPalette(e.target.value); });
 $("#palette-input").addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closePalette();
+  // Stop here: the document-level Escape would also close the open skill.
+  if (e.key === "Escape") { e.stopPropagation(); closePalette(); }
   else if (e.key === "ArrowDown") { e.preventDefault(); paletteSel = Math.min(paletteSel + 1, paletteItems.length - 1); renderPalette(e.target.value); }
   else if (e.key === "ArrowUp") { e.preventDefault(); paletteSel = Math.max(paletteSel - 1, 0); renderPalette(e.target.value); }
   else if (e.key === "Enter") runPaletteItem(paletteSel);
@@ -814,7 +852,7 @@ function setTheme(theme) {
 const THEME_ORDER = ["system", "light", "dark"];
 $("#theme-btn").addEventListener("click", () => setTheme(THEME_ORDER[(THEME_ORDER.indexOf(state.theme) + 1) % THEME_ORDER.length]));
 $("#search-pill").addEventListener("click", openPalette);
-$("#back-btn").addEventListener("click", closeDetail);
+$("#back-btn").addEventListener("click", goBack);
 for (const b of document.querySelectorAll("#segmented button"))
   b.addEventListener("click", () => setTab(b.dataset.tab));
 
@@ -837,7 +875,7 @@ async function load() {
   if (data.platform === "darwin") {
     isMac = true;
     document.body.classList.add("mac");
-    document.body.className = "mac " + cx(styles.body, styles.bodyMac);
+    document.body.className = "mac " + cx(styles.body);
   }
   model = buildModel();
   rowsCache = null;

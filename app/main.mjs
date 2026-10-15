@@ -68,7 +68,6 @@ function createWindow() {
     backgroundColor: windowBackground(),
     titleBarStyle: isMac ? "hiddenInset" : "hidden",
     trafficLightPosition: { x: 20, y: 19 }, // centered on the toolbar row
-    ...(isMac ? { vibrancy: "sidebar", visualEffectState: "active" } : {}),
     webPreferences: {
       preload: path.join(here, "preload.cjs"),
       contextIsolation: true,
@@ -89,8 +88,9 @@ ipcMain.handle("typecase:data", () => {
   return data;
 });
 
-// The window background and vibrancy follow the native appearance, so
-// the app theme drives it; otherwise light mode shows dark chrome in a dark OS.
+// The page paints the theme canvas itself (opaque), so a theme switch
+// repaints in one frame. The native background only shows while the
+// window opens or resizes; keep it matching the app theme.
 const windowBackground = () => (nativeTheme.shouldUseDarkColors ? "#161618" : "#f5f5f7");
 nativeTheme.on("updated", () => win?.setBackgroundColor(windowBackground()));
 ipcMain.on("typecase:set-theme", (_e, theme) => {

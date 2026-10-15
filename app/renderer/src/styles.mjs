@@ -16,12 +16,11 @@ export const styles = stylex.create({
     backgroundColor: vars.canvas,
     overflow: "hidden",
   },
-  bodyMac: { backgroundColor: "transparent" }, // let window vibrancy show through
 
   // 4px window inset keeps the panels concentric with the 16pt window corner.
   app: { display: "flex", height: "100vh", padding: "4px", gap: "4px", backgroundColor: "transparent" },
 
-  /* ---- Sidebar: floating, rounded, translucent inset ---- */
+  /* ---- Sidebar: floating, rounded inset ---- */
   sidebar: {
     width: "216px",
     flex: "none",
@@ -29,7 +28,6 @@ export const styles = stylex.create({
     flexDirection: "column",
     borderRadius: vars.radiusPanel,
     backgroundColor: vars.sidebarBg,
-    backdropFilter: "blur(28px) saturate(1.3)",
     borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
     overflow: "hidden",
   },
@@ -158,6 +156,10 @@ export const styles = stylex.create({
     borderRadius: vars.radiusInset,
     outline: "none",
     backgroundColor: { default: null, ":hover": vars.hover, ":focus-visible": vars.activeRow },
+    // Keyboard focus scrolls rows clear of the floating toolbar (the
+    // content's 58px top padding) and off the panel's bottom edge.
+    scrollMarginTop: "58px",
+    scrollMarginBottom: "12px",
   },
   skillRowFocused: { backgroundColor: { default: vars.activeRow, ":hover": vars.activeRow } },
   rName: {
@@ -377,7 +379,9 @@ export const styles = stylex.create({
     borderBottomWidth: "0.5px", borderBottomStyle: "solid", borderBottomColor: vars.hairline,
   },
   paletteResults: { overflowY: "auto", padding: "3.5px" },
-  paletteRow: { display: "flex", alignItems: "baseline", gap: "10px", padding: "8px 14px", borderRadius: vars.radiusInset },
+  // Scroll margin = the results padding, so a selected row never sits flush
+  // against (and clipped by) the palette's rounded edge.
+  paletteRow: { display: "flex", alignItems: "baseline", gap: "10px", padding: "8px 14px", borderRadius: vars.radiusInset, scrollMarginTop: "3.5px", scrollMarginBottom: "3.5px" },
   paletteRowSelected: { backgroundColor: vars.accent, color: vars.accentInk },
   paletteName: { fontWeight: 600, fontSize: "13px" },
   paletteDesc: {
