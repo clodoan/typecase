@@ -13,7 +13,8 @@
     "pretest": "npm run build",
     "test": "playwright test",
     "predist": "npm run build",
-    "dist": "electron-builder --mac --dir"
+    "dist": "electron-builder --mac --dir",
+    "release": "npm run build && node build/release.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

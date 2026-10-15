@@ -20,6 +20,24 @@ structured record, and gives you three layers on top:
 and [clodoan/skills](https://github.com/clodoan/skills)) — nothing private
 or internal.*
 
+## Install the Mac app
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/clodoan/typecase/main/install.sh | sh
+```
+
+This downloads the latest release for your Mac (Apple silicon or Intel),
+installs `Typecase.app` into `/Applications`, and opens it. Run the same
+command again to update.
+
+To install by hand, download `Typecase-mac-arm64.zip` (Apple silicon) or
+`Typecase-mac-x64.zip` (Intel) from
+[Releases](https://github.com/clodoan/typecase/releases/latest), unzip it,
+and drag `Typecase.app` into Applications. The app isn't notarized, so
+macOS blocks the first open: go to **System Settings → Privacy & Security**
+and click **Open Anyway**, or run
+`xattr -dr com.apple.quarantine /Applications/Typecase.app`.
+
 ## Quick start
 
 ```bash
@@ -145,12 +163,13 @@ changes on disk.
   Tools, Collections (one per skill root), Sources (user / project /
   plugin scope).
 - **Row list** — one compact hairline row per skill: name, one-line
-  description, duplicate / overlap / risky / changed badges, tool ·
+  description, copies (×N) / risky / overlap / changed chips, tool ·
   scope, token size. Identical installs across tools collapse into one
-  row marked `×N`. Two densities; arrow-key navigation. The floating
-  toolbar holds the sidebar and density toggles, a back chevron and the
+  row marked `×N`. Arrow-key navigation. The floating toolbar holds the
+  sidebar toggle, a back chevron and the
   Rendered / Source / History tabs in the detail view, the theme toggle
-  (system / light / dark), and the ⌘K search pill.
+  (system / light / dark), and the ⌘K search pill. ⌘K finds skills and
+  also switches theme: type "light", "dark", "system", or "theme".
 - **Detail view** — hairline rows for triggers, when (not) to use, tools
   it can call with risky flags, files referenced, every install path
   (Reveal in Finder / Open in Cursor), overlaps, and lock state, followed
@@ -183,6 +202,15 @@ machine):
 ```bash
 cd app
 npm run dist              # electron-builder --mac --dir → dist/mac*/Typecase.app
+```
+
+Build the downloadable release zips (ad-hoc signed, Apple silicon and
+Intel) that `install.sh` fetches:
+
+```bash
+cd app
+npm run release           # → dist/release/Typecase-mac-{arm64,x64}.zip
+gh release create v0.x.y dist/release/*.zip
 ```
 
 The packaged app uses the green icon (`build/icon.icns`); `npm start` runs
