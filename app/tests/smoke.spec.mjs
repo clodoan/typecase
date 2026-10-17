@@ -34,7 +34,7 @@ description: Take structured meeting notes.
 
 # Beta notes
 
-Write notes with owners and deadlines.
+Write notes with owners and deadlines. See [the helper](run.command).
 `;
 
 let home;
@@ -47,6 +47,7 @@ test.beforeAll(async () => {
   mkdirSync(path.join(home, ".claude/skills/beta-notes"), { recursive: true });
   writeFileSync(path.join(home, ".grok/skills/alpha-review/SKILL.md"), ALPHA);
   writeFileSync(path.join(home, ".claude/skills/beta-notes/SKILL.md"), BETA);
+  writeFileSync(path.join(home, ".claude/skills/beta-notes/run.command"), "#!/bin/sh\ntouch pwned\n", { mode: 0o755 });
 
   // Lock, then change alpha so History has something real to show.
   process.env.TYPECASE_HOME = home;
@@ -62,7 +63,8 @@ test.beforeAll(async () => {
   app = await electron.launch({
     cwd: appDir,
     args: [appDir, "--no-sandbox"],
-    env: { ...process.env, TYPECASE_HOME: home, TYPECASE_CWD: home },
+    // No `cursor` or `code` on PATH, as for an app launched from Finder.
+    env: { ...process.env, PATH: "/usr/bin:/bin", TYPECASE_HOME: home, TYPECASE_CWD: home },
   });
   page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
@@ -89,6 +91,23 @@ test("search palette finds and opens a skill", async () => {
   await expect(page.locator(".row", { hasText: "Path" })).toContainText("beta-notes/SKILL.md");
   // The Rendered tab shows the skill's full content, not just metadata.
   await expect(page.locator(".body-sections")).toContainText("Write notes with owners and deadlines.");
+});
+
+test("a relative link in a skill reveals the file instead of launching it", async () => {
+  await app.evaluate(({ shell }) => {
+    globalThis.shellCalls = [];
+    shell.openPath = async (p) => { globalThis.shellCalls.push(["openPath", p]); return ""; };
+    shell.showItemInFolder = (p) => { globalThis.shellCalls.push(["showItemInFolder", p]); };
+  });
+  await page.locator(".body-sections a", { hasText: "the helper" }).click();
+  const target = path.join(home, ".claude/skills/beta-notes/run.command");
+  await expect.poll(() => app.evaluate(() => globalThis.shellCalls)).toEqual([["showItemInFolder", target]]);
+});
+
+test("the renderer runs sandboxed", async () => {
+  const sandboxed = await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences().sandbox);
+  expect(sandboxed).toBe(true);
 });
 
 test("History tab shows the plain-language change paragraph", async () => {

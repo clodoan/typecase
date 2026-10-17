@@ -218,6 +218,16 @@ export function pin(lock, data, name) {
   const locked = Object.values(lock.skills).filter((s) => s.name === name);
   if (!locked.length) throw new Error(`"${name}" is not in ${LOCKFILE}`);
   const results = [];
+  // skills.lock can come from a cloned repo, so its hash and dir are
+  // untrusted: pin deletes rec.dir and copies a snapshot over it.
+  const inRoot = (dir) => data.roots.some((r) => {
+    const rel = path.relative(r.dir, path.resolve(dir));
+    return rel && !rel.startsWith("..") && !path.isAbsolute(rel);
+  });
+  for (const rec of locked) {
+    if (!/^[0-9a-f]{64}$/.test(rec.hash ?? "")) throw new Error(`${rec.name}: ${rec.hash} is not a skill snapshot hash`);
+    if (typeof rec.dir !== "string" || !inRoot(rec.dir)) throw new Error(`${rec.name}: ${rec.dir} is outside every skill root`);
+  }
   for (const rec of locked) {
     const snap = path.join(snapshotRoot(), rec.hash);
     if (!existsSync(snap)) throw new Error(`no snapshot for ${rec.name}@${rec.hash.slice(0, 12)} — was lock run with snapshots on?`);

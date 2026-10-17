@@ -28,7 +28,9 @@ curl -fsSL https://raw.githubusercontent.com/clodoan/typecase/main/install.sh | 
 
 This downloads the latest release for your Mac (Apple silicon or Intel),
 installs `Typecase.app` into `/Applications`, and opens it. Run the same
-command again to update.
+command again to update. Read [`install.sh`](install.sh) before you pipe
+it to `sh`. The app isn't notarized, so the script removes the macOS
+quarantine flag, and Gatekeeper does not check the app on first open.
 
 To install by hand, download `Typecase-mac-arm64.zip` (Apple silicon) or
 `Typecase-mac-x64.zip` (Intel) from
@@ -37,6 +39,10 @@ and drag `Typecase.app` into Applications. The app isn't notarized, so
 macOS blocks the first open: go to **System Settings → Privacy & Security**
 and click **Open Anyway**, or run
 `xattr -dr com.apple.quarantine /Applications/Typecase.app`.
+
+To check a download, compare `shasum -a 256 Typecase-mac-arm64.zip` with
+the SHA-256 digest that the release page shows next to the asset. To
+report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Quick start
 
@@ -193,7 +199,7 @@ Run it in development:
 
 ```bash
 cd app
-npm install
+npm ci
 npm start                 # or: node ../scripts/typecase.mjs open
 ```
 
@@ -231,8 +237,8 @@ fresh machine.
 ## Testing
 
 ```bash
-node --test scripts/typecase.test.mjs   # parser + CLI (14 tests)
-cd app && npm install && npm test       # Electron smoke (4 tests; builds the renderer first)
+node --test scripts/typecase.test.mjs   # parser + CLI (15 tests)
+cd app && npm ci && npm test            # Electron smoke (6 tests; builds the renderer first)
 ```
 
 CI runs both; the Electron suite runs under `xvfb-run` on Linux runners.
