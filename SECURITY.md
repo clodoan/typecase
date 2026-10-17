@@ -10,8 +10,7 @@ Report privately through
 [GitHub security advisories](https://github.com/clodoan/typecase/security/advisories/new).
 Do not open a public issue for a vulnerability.
 
-Include the version, steps to reproduce, and the impact you expect. You
-get a reply within a week.
+Include the version, steps to reproduce, and the impact you expect.
 
 ## Threat model
 
