@@ -1,12 +1,6 @@
-/* Builds the downloadable Mac app for a GitHub release:
-     dist/release/Typecase-mac-arm64.zip  (Apple silicon)
-     dist/release/Typecase-mac-x64.zip    (Intel)
-   File names carry no version so install.sh can always fetch
-   releases/latest/download/<name>. Run with `npm run release`.
-
-   The app is not notarized. Each bundle gets a full ad-hoc signature:
-   the default linker-only signature fails a deep check, and macOS then
-   reports a downloaded copy as damaged instead of unverified. */
+/* Not notarized. Each bundle gets a full ad-hoc signature: the default
+   linker-only signature fails a deep check, and macOS reports a
+   downloaded copy as damaged instead of unverified. */
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";

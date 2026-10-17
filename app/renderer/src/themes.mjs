@@ -2,7 +2,6 @@ import * as stylex from "@stylexjs/stylex";
 
 import { vars } from "./tokens.stylex.mjs";
 
-/* Neutral dark counterpart to the light defaults in tokens.stylex.mjs. */
 export const darkTheme = stylex.createTheme(vars, {
   canvas: "#161618",
   panel: "#1d1d1f",

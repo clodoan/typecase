@@ -1,11 +1,3 @@
-/* Perf lever: boots the app against a given home and prints render
-   timings as JSON. Rerunnable by anyone:
-     node tests/perf.mjs /home/ubuntu/typecase-demo /tmp/lockdemo
-     node tests/perf.mjs --synthetic 1000
-   Reads window.__perf (set by the renderer) for IPC + first render,
-   then measures filter/navigation re-render durations recorded by
-   the renderer's own render() instrumentation. */
-
 import { _electron as electron } from "@playwright/test";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
@@ -80,9 +72,6 @@ await page.waitForSelector(".skill-row", { timeout: 60000 });
 const boot = await page.evaluate(() => window.__perf ?? null);
 const rowCount = await page.locator(".skill-row").count();
 
-// Filter re-render: click a nav item, then read the duration the
-// renderer recorded for that render pass (window.__renderStats).
-// Robust to deferred rendering (view transitions) in older builds.
 const clickAndMeasure = (wanted) => page.evaluate(async (label) => {
   const items = [...document.querySelectorAll(".nav-item")];
   const target = items.find((el) => el.textContent.includes(label));

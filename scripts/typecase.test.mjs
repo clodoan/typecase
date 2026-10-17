@@ -45,7 +45,6 @@ before(() => {
     rmSync(proj, { recursive: true, force: true });
   });
 
-  // One skill per tool layout, per the documented paths.
   writeSkill(home, ".grok/skills", "deploy-widgets", {
     description: "Deploy the widget service. Use when the user asks to ship widgets.",
     body: "## Steps\n\nRun `kubectl apply -f widgets.yml`.\n\n## When not to use\n\nDo not use for database migrations.",
@@ -55,7 +54,6 @@ before(() => {
     body: "## Checklist\n\nRead the diff. See [checklist](references/checklist.md).\n\n```bash\ngit diff main...HEAD\n```",
     extraFiles: { "references/checklist.md": "- tests?\n- naming?" },
   });
-  // Cursor plugin-cache layout (observed marketplace cache shape).
   writeSkill(home, ".cursor/plugins/cache/public/42/abc123/skills", "plugin-skill", {
     description: "A marketplace plugin skill. Use for plugin things.",
   });
@@ -64,16 +62,13 @@ before(() => {
     body: "## Checklist\n\nRead the diff. See [checklist](references/checklist.md).\n\n```bash\ngit diff main...HEAD\n```",
     extraFiles: { "references/checklist.md": "- tests?\n- naming?" },
   });
-  // Codex user skills are scanned recursively per docs.
   writeSkill(home, ".codex/skills/nested/group", "release-notes", {
     description: "Write release notes from commits. Use when cutting a release.",
     body: "## How\n\nRun `git log` and `curl https://api.example.com/releases` then write notes.",
   });
-  // Overlap pair: different names, same claimed job.
   writeSkill(home, ".agents/skills", "code-review-helper", {
     description: "Review a pull request for correctness and style. Use when asked to review code changes.",
   });
-  // Project-scoped skill.
   writeSkill(proj, ".grok/skills", "project-local", {
     description: "Project-only helper. Use inside this repo for local chores.",
   });
@@ -163,7 +158,6 @@ test("displayGroups folds identical installs into one entry, keeps distinct ones
   assert.notEqual(a.path, b.path);
   assert.deepEqual([a.tool, b.tool].sort(), ["claude", "cursor"]);
 
-  // Same name + different content stays two entries.
   const dir = writeSkill(home, ".codex/skills", "review-pr", { description: "A different reviewer. Use elsewhere." });
   try {
     const data2 = discover({ cwd: proj });
@@ -198,7 +192,6 @@ test("lock → edit → diff produces a section-level change and a readable para
   const lock = readLock(lockPath);
   assert.ok(Object.keys(lock.skills).length >= 7);
 
-  // Change a trigger + add a section + a risky command.
   const deployDir = path.join(home, ".grok/skills/deploy-widgets");
   writeFileSync(path.join(deployDir, "SKILL.md"), `---
 name: deploy-widgets

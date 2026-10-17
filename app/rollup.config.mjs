@@ -1,8 +1,3 @@
-/* Renderer build: compiles StyleX (src/*.mjs + src/app.js) into
-   renderer/dist/app.js and the extracted renderer/dist/app.css.
-   Run via `npm run build`; prestart/predist keep `npm start` and
-   `npm run dist` working unchanged. */
-
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import stylexPlugin from "@stylexjs/rollup-plugin";
 import path from "node:path";

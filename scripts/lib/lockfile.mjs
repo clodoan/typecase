@@ -1,8 +1,3 @@
-/**
- * skills.lock + section-level diff + plain-language change paragraphs +
- * pin/restore snapshots + the running TYPECASE.md changelog.
- */
-
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync, readFileSync, writeFileSync, mkdirSync, cpSync, rmSync, appendFileSync,
@@ -26,7 +21,6 @@ function tryGit(dir, args) {
   }
 }
 
-/** Best-effort provenance: git remote+commit, or a nearby plugin version. */
 export function sourceOf(skill) {
   const commit = tryGit(skill.dir, ["rev-parse", "HEAD"]);
   if (commit) {
@@ -37,7 +31,6 @@ export function sourceOf(skill) {
       ref: tryGit(skill.dir, ["describe", "--tags", "--always"]),
     };
   }
-  // plugin.json / package.json next to or above the skill dir (≤3 levels)
   let dir = skill.dir;
   for (let i = 0; i < 3; i++) {
     for (const name of ["plugin.json", "package.json", ".claude-plugin/plugin.json"]) {
@@ -46,9 +39,7 @@ export function sourceOf(skill) {
         try {
           const meta = JSON.parse(readFileSync(file, "utf8"));
           if (meta.version) return { kind: "plugin", manifest: file, name: meta.name ?? null, version: meta.version };
-        } catch {
-          // fall through
-        }
+        } catch {}
       }
     }
     dir = path.dirname(dir);
@@ -88,7 +79,6 @@ export function readLock(lockPath = LOCKFILE) {
   return JSON.parse(readFileSync(lockPath, "utf8"));
 }
 
-/** Section-level diff between a locked record and a current skill. */
 export function sectionDiff(locked, current) {
   const changes = [];
   const oldSecs = new Map((locked.sections ?? []).map((s) => [s.heading, s.text]));
@@ -120,12 +110,6 @@ export function sectionDiff(locked, current) {
   return changes;
 }
 
-/**
- * One short plain-language paragraph: what will the agent now do
- * differently. Deterministic template by default; set TYPECASE_LLM_CMD
- * to a command that receives the change JSON on stdin and prints a
- * paragraph to use an LLM instead (falls back on any failure).
- */
 export function changeParagraph(entry) {
   if (process.env.TYPECASE_LLM_CMD) {
     const res = spawnSync(process.env.TYPECASE_LLM_CMD, {
@@ -142,8 +126,6 @@ export function changeParagraph(entry) {
   if (status === "removed") {
     return `**${name}** was removed: your agent no longer loads it, so tasks it used to catch (${(entry.triggers ?? "").slice(0, 140) || "its triggers"}) fall back to default behavior.`;
   }
-  // One SHORT paragraph: lead with behavior-relevant changes, name at
-  // most a couple of sections, and fold the rest into counts.
   const bits = [];
   const added = changes.filter((x) => x.kind === "section-added");
   const removed = changes.filter((x) => x.kind === "section-removed");
@@ -176,7 +158,6 @@ export function changeParagraph(entry) {
   return `**${name}**${ver} changed: ${summary}.`;
 }
 
-/** Diff a lock against a fresh discovery. */
 export function diffAgainstLock(lock, data) {
   const current = new Map(data.skills.filter((s) => !s.error).map((s) => [keyOf(s), s]));
   const locked = new Map(Object.entries(lock.skills));
@@ -213,7 +194,6 @@ export function appendChangelog(entries, changelogPath = CHANGELOG) {
   appendFileSync(changelogPath, text);
 }
 
-/** Restore the locked version of one skill from its snapshot. */
 export function pin(lock, data, name) {
   const locked = Object.values(lock.skills).filter((s) => s.name === name);
   if (!locked.length) throw new Error(`"${name}" is not in ${LOCKFILE}`);
