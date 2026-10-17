@@ -237,7 +237,7 @@ fresh machine.
 ## Testing
 
 ```bash
-node --test scripts/typecase.test.mjs   # parser + CLI (14 tests)
+node --test scripts/typecase.test.mjs   # parser + CLI (15 tests)
 cd app && npm ci && npm test            # Electron smoke (6 tests; builds the renderer first)
 ```
 
