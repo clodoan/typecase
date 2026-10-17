@@ -759,7 +759,12 @@ function openPalette() {
   renderPalette("");
   input.focus();
 }
-function closePalette() { $("#palette-backdrop").hidden = true; }
+function closePalette() {
+  // Chromium only drops focus from a hidden field on its next frame; until then
+  // shortcuts would see the palette input as focused and ignore every key.
+  $("#palette-input").blur();
+  $("#palette-backdrop").hidden = true;
+}
 
 /* Commands sit above skills when the query matches their keywords
    (every query word must start a keyword). */
