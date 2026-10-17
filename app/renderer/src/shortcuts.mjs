@@ -1,16 +1,3 @@
-/* Every app-wide keyboard shortcut, in one table. To add or change one,
-   edit SHORTCUTS and give app.js an action with the same id.
-
-   keys   one or more combos: "mod+k", "mod+[", "escape", "1", "arrowdown".
-          mod is ⌘ on macOS and Ctrl elsewhere; shift / alt also work.
-   scope  where it fires:
-            global  always, even while the ⌘K palette is open
-            app     anywhere the palette is closed (default)
-            list    on the skill list
-            detail  on a skill's detail view
-   Shortcuts other than global ones never fire while typing in a field.
-   Keys inside the palette (arrows, Enter, Esc) belong to the palette. */
-
 export const SHORTCUTS = [
   { id: "search", keys: ["mod+k"], label: "Search skills and commands", scope: "global" },
   { id: "toggleSidebar", keys: ["mod+\\"], label: "Toggle sidebar" },
@@ -44,7 +31,6 @@ function matches(combo, e) {
   return key === c.key || CODE_KEYS[e.code] === c.key;
 }
 
-/** Display text for a shortcut id, e.g. "⌘[" — for tooltips and hints. */
 export function shortcutText(id) {
   const s = SHORTCUTS.find((x) => x.id === id);
   if (!s) return "";
@@ -53,11 +39,6 @@ export function shortcutText(id) {
   return mods + (SYMBOLS[c.key] ?? c.key.toUpperCase());
 }
 
-/**
- * Install the single document keydown listener.
- *   actions   { [id]: (event) => void | false }  return false to let the key through
- *   scope     () => "palette" | "list" | "detail"  where the user is right now
- */
 export function installShortcuts({ actions, scope }) {
   for (const s of SHORTCUTS) if (!actions[s.id]) throw new Error(`No action for shortcut "${s.id}"`);
   document.addEventListener("keydown", (e) => {

@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-/**
- * typecase — the case your agent skills live in. Reader, parser, and
- * lockfile/changelog for every skill installed across Grok, Cursor,
- * Claude Code and Codex. Fully headless; `typecase open` adds a desktop
- * reader (Electron) with a small static-HTML fallback.
- */
 
 import { spawn } from "node:child_process";
 import { writeFileSync, existsSync } from "node:fs";
@@ -83,7 +77,6 @@ function cmdLs(args) {
     console.log(JSON.stringify({ ...data, skills }, null, 2));
     return;
   }
-  // One line per distinct skill: identical installs fold into ×N.
   const groups = displayGroups(skills)
     .map((idxs) => ({ s: skills[idxs[0]], copies: idxs.length, installs: idxs.map((i) => skills[i]) }))
     .sort((a, b) => a.s.tool.localeCompare(b.s.tool) || a.s.scope.localeCompare(b.s.scope) || a.s.name.localeCompare(b.s.name));
@@ -244,9 +237,6 @@ function cmdOpen() {
     console.log("opened the Typecase app");
     return;
   }
-  // Fallback: a small static HTML reader built from the same parser
-  // output (for headless boxes and agents; `cd app && npm install` to
-  // get the desktop app).
   const data = discover();
   const file = path.join(tmpdir(), "typecase-reader.html");
   writeFileSync(file, htmlReader(data, { lock: readLock() }));

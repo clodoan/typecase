@@ -1,9 +1,3 @@
-/**
- * Walk every skill root, parse every SKILL.md, and flag duplicates and
- * overlaps. This module is the single source of truth: the CLI, the
- * HTML fallback reader, and the Electron app all consume its output.
- */
-
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 
@@ -48,14 +42,6 @@ export function jaccard(a, b) {
 
 export const OVERLAP_THRESHOLD = 0.35;
 
-/**
- * Discover everything. Returns { roots, skills, duplicates, overlaps }.
- * - duplicates: same skill name in ≥2 places (same skill installed for
- *   several tools, or two different skills sharing a name).
- * - overlaps: distinct names whose trigger text claims the same job
- *   (trigger-token Jaccard ≥ threshold). Pairs with identical content
- *   hashes are reported as duplicates instead.
- */
 export function discover({ cwd = process.cwd() } = {}) {
   const roots = skillRoots({ cwd });
   const skills = [];
@@ -123,13 +109,6 @@ export function discover({ cwd = process.cwd() } = {}) {
   };
 }
 
-/**
- * Display-level grouping: identical installs (same name AND same
- * content hash) collapse into one entry. Returns an array of groups,
- * each an array of indexes into `skills`; the first index is the
- * representative. Per-install records and lock semantics are untouched
- * — this is how the app rows and CLI `ls` fold ×N copies.
- */
 export function displayGroups(skills) {
   const byKey = new Map();
   skills.forEach((s, i) => {
@@ -140,7 +119,6 @@ export function displayGroups(skills) {
   return [...byKey.values()];
 }
 
-/** Rank skills for `where <query>`: name > triggers > description > body. */
 export function where(data, query) {
   const q = tokenSet(query);
   const qLower = query.toLowerCase();

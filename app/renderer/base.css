@@ -1,7 +1,3 @@
-/* Static globals StyleX cannot own: reset, the hidden attribute,
-   Electron drag regions, scrollbars, and <code> inside generated HTML.
-   Everything themed lives in StyleX (src/tokens.stylex.mjs). */
-
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 /* Match the continuous curve macOS uses for the window corner, so nested

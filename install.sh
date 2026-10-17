@@ -1,6 +1,4 @@
 #!/bin/sh
-# Install or update Typecase.app from the latest GitHub release.
-#   curl -fsSL https://raw.githubusercontent.com/clodoan/typecase/main/install.sh | sh
 set -eu
 
 REPO="clodoan/typecase"

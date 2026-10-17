@@ -76,7 +76,6 @@ md.renderer.rules.image = (tokens, i, options, env, self) => {
 
 const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
 
-/** Render a SKILL.md file's body (frontmatter stripped) to HTML. */
 export function renderSkillMarkdown(raw) {
   return md.render(raw.replace(FRONTMATTER, ""));
 }

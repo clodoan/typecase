@@ -1,9 +1,3 @@
-/**
- * Parse one SKILL.md (plus its folder) into a structured record.
- * Hand-rolled frontmatter/markdown handling — zero dependencies, and
- * skills in the wild use only simple YAML (scalars and folded blocks).
- */
-
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -123,7 +117,6 @@ function whenNotText(frontmatter, sections) {
   return [...new Set(parts)].join(" ").replace(/\s+/g, " ").trim().slice(0, 600);
 }
 
-/** sha256 over every file in the skill folder (names + bytes), stable order. */
 export function hashSkillDir(dir) {
   const hash = createHash("sha256");
   const walk = (d) => {
@@ -152,9 +145,7 @@ export function parseSkill(skillFile, { tool, scope, root }) {
   let bytes = 0;
   try {
     bytes = statSync(skillFile).size;
-  } catch {
-    // unreadable: keep 0
-  }
+  } catch {}
 
   return {
     name: (frontmatter.name ?? path.basename(dir)).trim(),

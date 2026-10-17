@@ -1,10 +1,3 @@
-/**
- * Static single-file HTML fallback for `typecase open` on machines
- * without the desktop app (headless boxes, agents). Deliberately small:
- * same parser data, search, sidebar, detail, History — no interactivity
- * beyond filtering. The crafted experience is the Electron app.
- */
-
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 
 export function htmlReader(data, { lock } = {}) {

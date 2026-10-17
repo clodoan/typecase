@@ -1,10 +1,9 @@
-/* Every component style, ported from the old app.css. Semantic class
-   names (skill-row, nav-item, …) stay on elements for tests and event
-   delegation; these StyleX rules carry all presentation. */
-
 import * as stylex from "@stylexjs/stylex";
 
 import { vars } from "./tokens.stylex.mjs";
+
+const TOOLBAR_CLEARANCE = "58px";
+const PALETTE_INSET = "3.5px";
 
 export const styles = stylex.create({
   html: { height: "100%", overflow: "hidden" },
@@ -20,7 +19,6 @@ export const styles = stylex.create({
   // 4px window inset keeps the panels concentric with the 16pt window corner.
   app: { display: "flex", height: "100vh", padding: "4px", gap: "4px", backgroundColor: "transparent" },
 
-  /* ---- Sidebar: floating, rounded inset ---- */
   sidebar: {
     width: "216px",
     flex: "none",
@@ -43,8 +41,7 @@ export const styles = stylex.create({
     color: vars.ink3,
     padding: "14px 14px 5px",
   },
-  /* Interaction states shared by every sidebar and toolbar item. Active is
-     a fill and color change only, so labels never change width. */
+  /* Active is a fill and color change only, so labels never change width. */
   item: {
     backgroundColor: { default: "transparent", ":hover": vars.hover },
     color: { default: vars.ink2, ":hover": vars.ink },
@@ -71,7 +68,6 @@ export const styles = stylex.create({
   navCount: { marginLeft: "auto", color: vars.ink3, fontSize: "11px", fontVariantNumeric: "tabular-nums" },
   navIcon: { display: "inline-flex", flex: "none" },
 
-  /* ---- Main panel ---- */
   main: {
     flex: 1,
     minWidth: 0,
@@ -109,9 +105,6 @@ export const styles = stylex.create({
   },
   // Sidebar hidden on macOS: clear the traffic lights (they end at x≈80).
   toolbarBesideLights: { paddingLeft: "84px" },
-  /* One control shape for everything in the toolbar: icon buttons, the
-     detail tabs, and the search field share height and radius; colors come
-     from item / itemActive. */
   control: {
     display: "inline-flex",
     alignItems: "center",
@@ -127,7 +120,6 @@ export const styles = stylex.create({
   controlText: { padding: "0 10px" },
   tbSep: { width: "1px", height: "16px", backgroundColor: vars.hairline, margin: "0 2px" },
   backGroup: { display: "flex", alignItems: "center", gap: "6px" },
-  // Centered on the toolbar, independent of what sits on either side.
   tbTabs: { position: "absolute", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "2px" },
   tbSpacer: { flex: 1 },
 
@@ -136,15 +128,12 @@ export const styles = stylex.create({
   // Plain text: a boxed key would need a 0px radius inside the 4px control.
   searchKbd: { fontFamily: vars.font, fontSize: "10px", color: vars.ink3 },
 
-  /* ---- Content ---- */
-  // Stable gutter: short tabs (no scrollbar) keep the same column width.
-  content: { flex: 1, overflowY: "auto", scrollbarGutter: "stable", padding: "58px 22px 40px" },
+  content: { flex: 1, overflowY: "auto", scrollbarGutter: "stable", padding: `${TOOLBAR_CLEARANCE} 22px 40px` },
 
   countHead: { display: "flex", alignItems: "baseline", gap: "10px", padding: "6px 2px 16px" },
   countHeadH1: { fontSize: "22px", fontWeight: 700, letterSpacing: "-0.02em", margin: 0 },
   countHeadSub: { color: vars.ink3, fontSize: "12px" },
 
-  /* Compact skill rows */
   rowsList: { borderTopWidth: "0.5px", borderTopStyle: "solid", borderTopColor: vars.hairline },
   skillRow: {
     display: "flex",
@@ -156,9 +145,7 @@ export const styles = stylex.create({
     borderRadius: vars.radiusInset,
     outline: "none",
     backgroundColor: { default: null, ":hover": vars.hover, ":focus-visible": vars.activeRow },
-    // Keyboard focus scrolls rows clear of the floating toolbar (the
-    // content's 58px top padding) and off the panel's bottom edge.
-    scrollMarginTop: "58px",
+    scrollMarginTop: TOOLBAR_CLEARANCE,
     scrollMarginBottom: "12px",
   },
   skillRowFocused: { backgroundColor: { default: vars.activeRow, ":hover": vars.activeRow } },
@@ -213,7 +200,6 @@ export const styles = stylex.create({
     color: vars.ink2,
   },
 
-  /* ---- Detail view ---- */
   detail: { maxWidth: "760px", margin: "0 auto" },
   detailTop: { display: "flex", alignItems: "center", gap: "8px", paddingBottom: "6px" },
   spacer: { flex: 1 },
@@ -308,7 +294,6 @@ export const styles = stylex.create({
     boxShadow: vars.shadow,
   },
 
-  /* Source + history */
   sourceBlock: {
     fontFamily: vars.mono,
     fontSize: "11.5px",
@@ -346,7 +331,6 @@ export const styles = stylex.create({
   diffLiChanged: { "::before": { backgroundColor: vars.accent } },
   emptyHint: { color: vars.ink3, fontSize: "12.5px", padding: "18px 0" },
 
-  /* ---- Command palette ---- */
   paletteBackdrop: {
     position: "fixed",
     inset: 0,
@@ -378,10 +362,8 @@ export const styles = stylex.create({
     padding: "15px 18px",
     borderBottomWidth: "0.5px", borderBottomStyle: "solid", borderBottomColor: vars.hairline,
   },
-  paletteResults: { overflowY: "auto", padding: "3.5px" },
-  // Scroll margin = the results padding, so a selected row never sits flush
-  // against (and clipped by) the palette's rounded edge.
-  paletteRow: { display: "flex", alignItems: "baseline", gap: "10px", padding: "8px 14px", borderRadius: vars.radiusInset, scrollMarginTop: "3.5px", scrollMarginBottom: "3.5px" },
+  paletteResults: { overflowY: "auto", padding: PALETTE_INSET },
+  paletteRow: { display: "flex", alignItems: "baseline", gap: "10px", padding: "8px 14px", borderRadius: vars.radiusInset, scrollMarginTop: PALETTE_INSET, scrollMarginBottom: PALETTE_INSET },
   paletteRowSelected: { backgroundColor: vars.accent, color: vars.accentInk },
   paletteName: { fontWeight: 600, fontSize: "13px" },
   paletteDesc: {
@@ -397,7 +379,6 @@ export const styles = stylex.create({
   paletteToolSelected: { color: vars.accentInk, opacity: 0.75 },
 });
 
-/* Rendered skill markdown (classes are stamped per token in markdown.mjs). */
 export const md = stylex.create({
   root: { fontSize: "13.5px", lineHeight: 1.65, color: vars.ink, overflowWrap: "break-word", padding: "24px 0 40px" },
   block: { marginTop: 0, marginBottom: "12px" },
