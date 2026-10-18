@@ -256,6 +256,20 @@ test("pin restores the locked folder and snapshots the current one", () => {
   assert.ok(existsSync(path.join(process.env.TYPECASE_SNAPSHOTS, mutated)), "mutated version not snapshotted");
 });
 
+test("pin refuses a lock entry that points outside the skill roots", () => {
+  const victim = mkdtempSync(path.join(tmpdir(), "typecase-victim-"));
+  writeFileSync(path.join(victim, "keep.txt"), "important");
+  const lock = { skills: { "grok:project:evil": { name: "evil", tool: "grok", scope: "project", hash: "..", dir: victim } } };
+  assert.throws(() => pin(lock, discover({ cwd: proj }), "evil"), /not a skill snapshot|outside/);
+  assert.equal(readFileSync(path.join(victim, "keep.txt"), "utf8"), "important");
+
+  const dataNow = discover({ cwd: proj });
+  const real = dataNow.skills.find((s) => s.name === "pinme");
+  const outside = { skills: { k: { name: "pinme", tool: real.tool, scope: real.scope, hash: real.hash, dir: victim } } };
+  assert.throws(() => pin(outside, dataNow, "pinme"), /outside/);
+  assert.equal(readFileSync(path.join(victim, "keep.txt"), "utf8"), "important");
+});
+
 test("CLI: ls/where/show/diff round-trip with exit codes", () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "typecase-cli-"));
   const run = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", env: { ...process.env } });
