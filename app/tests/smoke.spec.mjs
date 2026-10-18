@@ -1,7 +1,3 @@
-/* Electron smoke test: launch, grid renders, search opens a skill,
-   History tab shows the change paragraph. Runs against a hermetic
-   fixture home so CI never depends on the runner's real skills. */
-
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -49,7 +45,6 @@ test.beforeAll(async () => {
   writeFileSync(path.join(home, ".claude/skills/beta-notes/SKILL.md"), BETA);
   writeFileSync(path.join(home, ".claude/skills/beta-notes/run.command"), "#!/bin/sh\ntouch pwned\n", { mode: 0o755 });
 
-  // Lock, then change alpha so History has something real to show.
   process.env.TYPECASE_HOME = home;
   process.env.TYPECASE_SNAPSHOTS = path.join(home, ".cache/typecase/snapshots");
   const { discover } = await import("../../scripts/lib/discover.mjs");
@@ -89,7 +84,6 @@ test("search palette finds and opens a skill", async () => {
   await page.keyboard.press("Enter");
   await expect(page.locator(".detail-hero")).toHaveText("beta-notes");
   await expect(page.locator(".row", { hasText: "Path" })).toContainText("beta-notes/SKILL.md");
-  // The Rendered tab shows the skill's full content, not just metadata.
   await expect(page.locator(".body-sections")).toContainText("Write notes with owners and deadlines.");
 });
 
@@ -111,7 +105,7 @@ test("the renderer runs sandboxed", async () => {
 });
 
 test("History tab shows the plain-language change paragraph", async () => {
-  await page.keyboard.press("Escape"); // back to the row list
+  await page.keyboard.press("Escape");
   await page.locator(".skill-row", { hasText: "alpha-review" }).click();
   await expect(page.locator(".detail-hero")).toHaveText("alpha-review");
   await page.locator('#segmented button[data-tab="history"]').click();

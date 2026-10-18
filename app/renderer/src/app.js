@@ -1,17 +1,3 @@
-/* Typecase renderer. All data comes from the main process over the
-   preload bridge; this file is pure presentation + navigation state.
-
-   Styling is StyleX (compiled by rollup into dist/app.css): semantic
-   class names (skill-row, nav-item, …) stay on elements for tests and
-   event delegation, the compiled classes carry all presentation.
-
-   Rendering discipline: every derived set (changed keys, overlap paths,
-   name collisions, per-group flags, sidebar counts) is computed ONCE
-   per data payload into `model`. Lists render as single HTML strings
-   with one delegated listener per surface. A state change re-renders
-   only the surface it affects; the sidebar is built once per payload
-   and only its active highlight is synced afterwards. */
-
 import * as stylex from "@stylexjs/stylex";
 
 import { HEADING_ID_PREFIX, MARKDOWN_ROOT, renderSkillMarkdown } from "./markdown.mjs";
@@ -21,7 +7,6 @@ import { darkTheme } from "./themes.mjs";
 
 const cx = (...xs) => stylex.attrs(...xs).class ?? "";
 
-/* Static class strings, computed once. */
 const C = {
   navHeading: cx(styles.navHeading),
   navItem: cx(styles.navItem, styles.item),
@@ -127,12 +112,12 @@ const LIB_ICONS = {
 let data = null;
 let model = null;
 const state = {
-  library: "all",       // all | active | changed | overlaps
+  library: "all",
   tool: null,
   scope: null,
-  collection: null,     // root dir
+  collection: null,
   theme: localStorage.getItem("typecase-theme") || "system",
-  view: "grid",         // grid | detail
+  view: "grid",
   groupKey: null,
   tab: "rendered",
   showFrontmatter: false,
@@ -144,8 +129,6 @@ const esc = (s) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const keyOf = (s) => `${s.tool}:${s.scope}:${s.name}:${s.path}`;
 const lockKeyOf = (s) => `${s.tool}:${s.scope}:${s.name}`; // matches lockfile.mjs keyOf
-
-/* ---------- shell: StyleX classes onto the static index.html ---------- */
 
 let isMac = false;
 let sidebarHidden = false;
@@ -214,8 +197,6 @@ function applyTheme() {
 }
 darkMQ.addEventListener("change", () => { if (state.theme === "system") applyTheme(); });
 
-/* ---------- model: derived once per data payload ---------- */
-
 function buildModel() {
   const skills = data.skills;
   const changedKeys = new Set((data.changes ?? []).filter((c) => c.status !== "removed").map((c) => c.key));
@@ -242,7 +223,6 @@ function buildModel() {
       installs,
       copies: installs.length,
       changed: installs.some((s) => changedKeys.has(lockKeyOf(s))),
-      // A name clash with different content counts as an overlap too.
       overlap: installs.some((s) => overlapPaths.has(s.path)) || collisionNames.has(rep.name),
       risky: rep.riskyTools.length > 0,
       tools: [...new Set(installs.map((s) => s.tool))],
@@ -279,7 +259,6 @@ function visibleGroups() {
   return out;
 }
 
-/** The install whose tool/scope/root matches the active filter. */
 function repFor(g) {
   if (state.tool) return g.installs.find((s) => s.tool === state.tool) ?? g.rep;
   if (state.scope) return g.installs.find((s) => s.scope === state.scope) ?? g.rep;
@@ -294,7 +273,6 @@ function fuzzyScore(query, s) {
   const hay = `${s.description ?? ""} ${s.triggers ?? ""}`.toLowerCase();
   if (name === q) return 100;
   if (name.includes(q)) return 60 - name.indexOf(q);
-  // subsequence on name
   let i = 0;
   for (const ch of name) if (ch === q[i]) i++;
   if (i === q.length) return 30;
@@ -303,8 +281,6 @@ function fuzzyScore(query, s) {
   const hits = words.filter((w) => hay.includes(w) || name.includes(w)).length;
   return hits === words.length ? 8 : hits > 0 ? 2 : -1;
 }
-
-/* ---------- sidebar: built once per payload, active state synced ---------- */
 
 function navButton({ nav, icon, label, count }) {
   return `<button class="nav-item ${C.navItem}" data-nav="${esc(nav)}">
@@ -372,8 +348,6 @@ $("#sidenav").addEventListener("click", (e) => {
   else if (kind === "scope") navigate({ ...list, library: "all", tool: null, scope: id, collection: null });
 });
 
-/* ---------- rows ---------- */
-
 function toolLabel(id) { return TOOLS.find((t) => t.id === id)?.label ?? id; }
 
 function badgesHtml(g) {
@@ -388,14 +362,9 @@ function badgesHtml(g) {
 const rowClass = (focused) => "skill-row " + (focused ? C.skillRowFocused : C.skillRow);
 const rNameClass = () => "r-name " + C.rName;
 
-/* Row elements are built ONCE per data payload; filtering and
-   navigation toggle visibility on the cached nodes instead of
-   re-parsing thousands of nodes per interaction. */
-let rowsCache = null; // { wrapEl, headEl, subEl, listEl, emptyEl, byKey }
+let rowsCache = null;
 
 function buildRowsCache() {
-  // Compact single-line rows: shared <use> icons and no inter-tag
-  // whitespace keep the one-time parse cost of large lists low.
   let rows = "";
   for (const g of model.groups) {
     const rep = g.rep;
@@ -459,8 +428,6 @@ function renderRows() {
   if (wrapEl.parentNode !== content) content.replaceChildren(wrapEl);
 }
 
-/* ---------- detail ---------- */
-
 function openDetail(key) {
   navigate({ view: "detail", groupKey: key });
 }
@@ -468,10 +435,6 @@ function openDetail(key) {
 function closeDetail() {
   navigate({ view: "grid", groupKey: null });
 }
-
-/* ---------- navigation history (⌘[ back, ⌘] forward) ----------
-   A location is the view, the open skill, and the sidebar filter. Each
-   history entry also keeps its scroll position for when you return. */
 
 const LOCATION_KEYS = ["view", "groupKey", "library", "tool", "scope", "collection"];
 const navHistory = { back: [], forward: [] };
@@ -540,7 +503,6 @@ function renderDetail() {
   renderTab();
 }
 
-/* Switching tabs re-renders only #tab-body; the header above stays put. */
 function renderTab() {
   const g = model.byKey.get(state.groupKey);
   const s = repFor(g);
@@ -551,8 +513,6 @@ function renderTab() {
   syncSegmented();
 }
 
-/* Skill file text, cached per data payload. A cached file fills its tab
-   synchronously, so switching tabs never paints an empty frame. */
 const rawCache = new Map();
 function withRaw(el, s, fill) {
   if (rawCache.has(s.path)) {
@@ -612,19 +572,16 @@ function renderTabRendered(body, g, s) {
       ${row("Size", `~${s.tokens} tokens · ${s.sections.length} sections`)}
     </div>
     <article class="body-sections md-body ${MARKDOWN_ROOT}"></article>`;
-  // The skill's full markdown below the metadata, rendered from the file.
   const article = body.querySelector(".md-body");
   withRaw(article, s, (raw) => { article.innerHTML = renderSkillMarkdown(raw); });
 }
 
-/** Links in rendered markdown never navigate the window. */
 function openMarkdownLink(href) {
   if (href.startsWith("#")) {
     document.getElementById(HEADING_ID_PREFIX + decodeURIComponent(href.slice(1)))?.scrollIntoView({ block: "start" });
   } else if (/^(https?|mailto):/i.test(href)) {
     window.typecase.openExternal(href);
   } else if (!/^[a-z][\w+.-]*:/i.test(href)) {
-    // Relative link: a file shipped next to SKILL.md (references/…).
     const g = model.byKey.get(state.groupKey);
     if (!g) return;
     const url = new URL(href, `file://${repFor(g).dir}/`);
@@ -655,8 +612,7 @@ function diffItemHtml(c) {
 }
 
 function renderTabHistory(body, g, s) {
-  // Prefer the install that actually changed; identical copies share
-  // content but may be locked under different keys.
+  // Identical copies share content but are locked under different keys.
   const changedInstall = g.installs.find((inst) => model.changeByKey.has(lockKeyOf(inst))) ?? s;
   const change = model.changeByKey.get(lockKeyOf(changedInstall));
   const lockEntry = data.lock?.skills?.[lockKeyOf(changedInstall)] ?? data.lock?.skills?.[lockKeyOf(s)];
@@ -697,8 +653,6 @@ function renderTabHistory(body, g, s) {
   body.innerHTML = html;
 }
 
-/* ---------- content: one delegated listener ---------- */
-
 $("#content").addEventListener("click", (e) => {
   const mdLink = e.target.closest(".md-body a[href]");
   if (mdLink) {
@@ -719,8 +673,6 @@ $("#content").addEventListener("click", (e) => {
   if (rowEl) openDetail(rowEl.dataset.key);
 });
 
-/* ---------- keyboard ---------- */
-
 function moveFocus(delta) {
   const rows = [...document.querySelectorAll("#rows .skill-row:not([hidden])")];
   if (!rows.length) return;
@@ -729,7 +681,6 @@ function moveFocus(delta) {
   rows[state.focusIndex].scrollIntoView({ block: "nearest" });
 }
 
-/* Shortcut keys and scopes live in shortcuts.mjs; these are the actions. */
 const focusedRow = () => document.querySelectorAll("#rows .skill-row:not([hidden])")[state.focusIndex];
 installShortcuts({
   scope: () => (!$("#palette-backdrop").hidden ? "palette" : state.view === "detail" ? "detail" : "list"),
@@ -748,8 +699,6 @@ installShortcuts({
   },
 });
 
-/* ---------- command palette ---------- */
-
 let paletteSel = 0;
 function openPalette() {
   $("#palette-backdrop").hidden = false;
@@ -766,8 +715,6 @@ function closePalette() {
   $("#palette-backdrop").hidden = true;
 }
 
-/* Commands sit above skills when the query matches their keywords
-   (every query word must start a keyword). */
 const COMMANDS = [
   { theme: "light", name: "Light theme", desc: "Switch to the light appearance" },
   { theme: "dark", name: "Dark theme", desc: "Switch to the dark appearance" },
@@ -786,7 +733,6 @@ function commandMatches(q) {
     .map((c) => ({ name: c.name, desc: c.desc, meta: state.theme === c.theme ? "Theme · current" : "Theme", run: c.run }));
 }
 
-/** Palette results: matching commands first, then up to 12 skills. */
 function paletteMatches(q) {
   const skills = model.groups
     .map((g) => ({ g, score: fuzzyScore(q, g.rep) }))
@@ -830,15 +776,12 @@ $("#palette-results").addEventListener("click", (e) => {
 });
 $("#palette-input").addEventListener("input", (e) => { paletteSel = 0; renderPalette(e.target.value); });
 $("#palette-input").addEventListener("keydown", (e) => {
-  // Stop here: the document-level Escape would also close the open skill.
-  if (e.key === "Escape") { e.stopPropagation(); closePalette(); }
+  if (e.key === "Escape") closePalette();
   else if (e.key === "ArrowDown") { e.preventDefault(); paletteSel = Math.min(paletteSel + 1, paletteItems.length - 1); renderPalette(e.target.value); }
   else if (e.key === "ArrowUp") { e.preventDefault(); paletteSel = Math.max(paletteSel - 1, 0); renderPalette(e.target.value); }
   else if (e.key === "Enter") runPaletteItem(paletteSel);
 });
 $("#palette-backdrop").addEventListener("click", (e) => { if (e.target.id === "palette-backdrop") closePalette(); });
-
-/* ---------- toolbar wiring ---------- */
 
 function setTab(tab) {
   state.tab = tab;
@@ -860,8 +803,6 @@ $("#search-pill").addEventListener("click", openPalette);
 $("#back-btn").addEventListener("click", goBack);
 for (const b of document.querySelectorAll("#segmented button"))
   b.addEventListener("click", () => setTab(b.dataset.tab));
-
-/* ---------- render root ---------- */
 
 function renderContent() {
   const t0 = performance.now();

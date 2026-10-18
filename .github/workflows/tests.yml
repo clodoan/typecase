@@ -20,7 +20,6 @@ jobs:
           node-version: 22
       - run: node --test scripts/typecase.test.mjs
 
-  # Electron smoke test under a virtual display.
   app:
     runs-on: ubuntu-latest
     steps:
@@ -32,7 +31,6 @@ jobs:
           node-version: 22
       - run: npm ci --no-fund --no-audit --ignore-scripts
         working-directory: app
-      # Compile the StyleX renderer (renderer/dist) before the smoke tests.
       - run: npm run build
         working-directory: app
       - run: xvfb-run --auto-servernum npx playwright test

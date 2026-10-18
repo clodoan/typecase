@@ -1,20 +1,12 @@
-/**
- * Typecase desktop app. Imports the same parser library as the CLI —
- * no duplicated parsing logic. Mac-first: hidden-inset title bar with
- * traffic lights floating over the translucent sidebar; sensible
- * fallbacks elsewhere.
- */
-
 import { app, BrowserWindow, ipcMain, shell, nativeTheme } from "electron";
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, watch } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// The parser library lives in ../scripts/lib in the repo (single source of
-// truth with the CLI). electron-builder can't pack files above the app root,
-// so the packaged app carries a copy under Contents/Resources/lib
-// (extraResources in package.json) and resolves it from there.
+// electron-builder can't pack files above the app root, so the packaged
+// app carries a copy under Contents/Resources/lib (extraResources in
+// package.json) and resolves it from there.
 const libURL = app.isPackaged
   ? pathToFileURL(path.join(process.resourcesPath, "lib") + path.sep)
   : new URL("../scripts/lib/", import.meta.url);
@@ -110,9 +102,6 @@ ipcMain.handle("typecase:open-external", (_e, url) => {
 });
 
 ipcMain.handle("typecase:open-editor", (_e, file) => {
-  // Cursor first, then VS Code, then reveal in the file manager. Never
-  // shell.openPath: the path can come from a link in a third-party skill,
-  // and opening a .app or .command file runs it.
   const candidates = ["cursor", "code"];
   const tryNext = (i) => {
     if (i >= candidates.length) {

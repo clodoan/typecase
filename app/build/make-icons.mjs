@@ -1,8 +1,3 @@
-/* Renders the Typecase app icons in a hidden Electron window:
-     build/icon.icns     prod, picked up by electron-builder
-     build/icon-dev.png  dev, set as the Dock icon by main.mjs when unpackaged
-   Run with `npm run icons` after editing the artwork below. */
-
 import { app, BrowserWindow } from "electron";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -36,7 +31,6 @@ function svg({ top, bottom, sort, ribbon }) {
   const gap = 28, cell = (tray.size - gap * 4) / 3, wide = cell * 2 + gap, r = 73;
   const col = (i) => tray.x + gap + i * (cell + gap);
   const row = (i) => tray.y + gap + i * (cell + gap);
-  // A job case has uneven compartments: 3 / wide+1 / 1+wide.
   const wells = [
     [col(0), row(0), cell], [col(1), row(0), cell], [col(2), row(0), cell],
     [col(0), row(1), wide], [col(2), row(1), cell],
@@ -102,7 +96,6 @@ async function main() {
   await render("icon-dev", VARIANTS.dev);
   win.destroy();
 
-  // .icns for the packaged app
   const iconset = path.join(here, "icon.iconset");
   rmSync(iconset, { recursive: true, force: true });
   mkdirSync(iconset);
