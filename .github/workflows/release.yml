@@ -1,0 +1,136 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    # contents: write publishes the GitHub release.
+    # id-token and attestations publish the build provenance attestation.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: npm install --no-fund --no-audit
+        working-directory: app
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      # package.json "release" is `npm run build && node build/release.mjs`.
+      # release.mjs runs `electron-builder --mac --dir --arm64 --x64`, then
+      # ad-hoc signs and writes dist/release/Typecase-mac-{arm64,x64}.zip with
+      # ditto so install.sh can fetch a stable name. mac.identity is null, so
+      # electron-builder will not sign until that key is removed.
+      # Signing and notarization run only when every secret below is set.
+      - name: Build macOS app
+        working-directory: app
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${CSC_LINK:-}" ] || missing+=(CSC_LINK)
+          [ -n "${CSC_KEY_PASSWORD:-}" ] || missing+=(CSC_KEY_PASSWORD)
+          [ -n "${APPLE_ID:-}" ] || missing+=(APPLE_ID)
+          [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] || missing+=(APPLE_APP_SPECIFIC_PASSWORD)
+          [ -n "${APPLE_TEAM_ID:-}" ] || missing+=(APPLE_TEAM_ID)
+
+          if [ "${#missing[@]}" -eq 0 ]; then
+            echo "Signing and notarization enabled."
+            node --input-type=commonjs -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.build.mac.identity; pkg.build.forceCodeSigning=true; fs.writeFileSync("package.json", JSON.stringify(pkg,null,2)+"\n");'
+            npm run build
+            npx electron-builder --mac --dir --arm64 --x64
+            rm -rf dist/release
+            mkdir -p dist/release
+            for spec in "arm64:dist/mac-arm64" "x64:dist/mac"; do
+              arch="${spec%%:*}"
+              bundle="${spec#*:}/Typecase.app"
+              codesign --verify --deep --strict "$bundle"
+              ditto -c -k --keepParent "$bundle" "dist/release/Typecase-mac-${arch}.zip"
+            done
+          else
+            echo "Signing and notarization skipped; missing ${missing[*]}. Ad-hoc signature only."
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            npm run release
+          fi
+
+          make_dmg() {
+            bundle="$1"
+            dmg="$2"
+            stage="$(mktemp -d)"
+            ditto "$bundle" "$stage/Typecase.app"
+            hdiutil create -volname Typecase -srcfolder "$stage" -ov -format UDZO "$dmg"
+            rm -rf "$stage"
+          }
+          make_dmg dist/mac-arm64/Typecase.app dist/release/Typecase-mac-arm64.dmg
+          make_dmg dist/mac/Typecase.app dist/release/Typecase-mac-x64.dmg
+
+          for arch in arm64 x64; do
+            zip="dist/release/Typecase-mac-${arch}.zip"
+            unzip -l "$zip" | grep -q "Typecase.app/Contents/Info.plist"
+          done
+
+      - name: Write SHA256 checksums
+        working-directory: app/dist/release
+        run: |
+          set -euo pipefail
+          files=(
+            Typecase-mac-arm64.zip
+            Typecase-mac-x64.zip
+            Typecase-mac-arm64.dmg
+            Typecase-mac-x64.dmg
+          )
+          for file in "${files[@]}"; do
+            [ -s "$file" ]
+          done
+          shasum -a 256 "${files[@]}" > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            app/dist/release/Typecase-mac-arm64.zip
+            app/dist/release/Typecase-mac-x64.zip
+            app/dist/release/Typecase-mac-arm64.dmg
+            app/dist/release/Typecase-mac-x64.dmg
+            app/dist/release/SHA256SUMS
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          files=(
+            app/dist/release/Typecase-mac-arm64.zip
+            app/dist/release/Typecase-mac-x64.zip
+            app/dist/release/Typecase-mac-arm64.dmg
+            app/dist/release/Typecase-mac-x64.dmg
+            app/dist/release/SHA256SUMS
+          )
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "${files[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$tag" \
+              --generate-notes
+          fi
