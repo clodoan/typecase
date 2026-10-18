@@ -63,7 +63,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(here, "preload.cjs"),
       contextIsolation: true,
-      sandbox: false,
+      sandbox: true,
     },
   });
   win.loadFile(path.join(here, "renderer", "index.html"));
@@ -105,7 +105,7 @@ ipcMain.handle("typecase:open-editor", (_e, file) => {
   const candidates = ["cursor", "code"];
   const tryNext = (i) => {
     if (i >= candidates.length) {
-      shell.openPath(file);
+      shell.showItemInFolder(file);
       return;
     }
     const child = spawn(candidates[i], [file], { detached: true, stdio: "ignore" });
