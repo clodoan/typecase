@@ -1,0 +1,25 @@
+{
+  "name": "typecase",
+  "version": "0.2.0",
+  "description": "The case your agent skills live in: discovery, lockfile, reader, and an MCP server that makes one skills repo the single source of truth.",
+  "license": "MIT",
+  "type": "module",
+  "repository": "github:clodoan/typecase",
+  "bin": {
+    "typecase": "scripts/typecase.mjs",
+    "typecase-mcp": "scripts/mcp-server.mjs"
+  },
+  "files": [
+    "scripts/",
+    "worker/",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test scripts/typecase.test.mjs scripts/mcp.test.mjs"
+  }
+}
