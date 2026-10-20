@@ -319,8 +319,41 @@ function renderSidebar() {
     html += navButton({ nav: `scope:${sc.id}`, icon: LIB_ICONS.active, label: sc.label, count: counts.scopes.get(sc.id) ?? 0 });
   }
 
+  html += `<div class="nav-heading ${C.navHeading}">Serve</div>`;
+  const serveButton = (serve, icon, label) =>
+    `<button class="serve-item ${C.navItem}" data-serve="${serve}" title="${esc(label)}">
+      <span class="${C.navIcon}">${icon}</span><span class="${C.navLabel}">${esc(label)}</span>
+    </button>`;
+  html += serveButton("cursor", TOOL_ICONS.cursor, "Write Cursor MCP config");
+  html += serveButton("grok", TOOL_ICONS.grok, "Write Grok MCP config");
+  html += serveButton("mirror", LIB_ICONS.changed, "Mirror library to tools");
+
   $("#sidenav").innerHTML = html;
   syncSidebar();
+}
+
+async function runServeAction(button) {
+  const kind = button.dataset.serve;
+  const label = button.children[1];
+  const original = label.textContent;
+  const done = (text, title) => {
+    label.textContent = text;
+    if (title) button.title = title;
+    setTimeout(() => { label.textContent = original; }, 4000);
+  };
+  try {
+    if (kind === "mirror") {
+      const res = await window.typecase.mirror();
+      if (res.canceled) return;
+      done(`Mirrored ${res.skills} skills ✓`, `${res.source} → ${res.targets.join(", ")}`);
+    } else {
+      const res = await window.typecase.connect(kind);
+      if (res.canceled) return;
+      done(`Wrote ${res.file.split("/").pop()} ✓`, `${res.file}\n${res.server.command} ${res.server.args.join(" ")}`);
+    }
+  } catch (err) {
+    done("Failed — hover for why", String(err?.message ?? err));
+  }
 }
 
 function syncSidebar() {
@@ -337,6 +370,11 @@ function syncSidebar() {
 }
 
 $("#sidenav").addEventListener("click", (e) => {
+  const serve = e.target.closest(".serve-item");
+  if (serve) {
+    runServeAction(serve);
+    return;
+  }
   const item = e.target.closest(".nav-item");
   if (!item) return;
   const [kind, ...restParts] = item.dataset.nav.split(":");
@@ -559,6 +597,19 @@ function renderTabRendered(body, g, s) {
     </li>`).join("");
 
   const mutedSpan = (t) => `<span class="${C.rowValueMuted}">${t}</span>`;
+
+  const agentChips = g.tools.map((t) => `<span class="${C.toolChip}">${esc(toolLabel(t))}</span>`).join("");
+  const repoDirs = [...new Set(
+    g.installs
+      .filter((inst) => inst.scope === "project")
+      .map((inst) => inst.root.replace(/[/\\]\.(grok|cursor|claude|codex|agents)[/\\]skills$/, "")),
+  )];
+  const usedBy =
+    `<div class="${C.toolChips}">${agentChips}</div>` +
+    (repoDirs.length
+      ? `<ul class="${C.valueList}">${repoDirs.map((d) => `<li class="mono ${C.mono} ${C.valueLi}">${esc(d)}</li>`).join("")}</ul>`
+      : "");
+
   body.innerHTML = `
     <div class="rows ${C.rows}">
       ${row("Triggers", esc(s.triggers) || null)}
@@ -568,12 +619,28 @@ function renderTabRendered(body, g, s) {
       ${row("Files referenced", s.files.length ? `<ul class="${C.valueList}">${s.files.map((f) => `<li class="mono ${C.mono} ${C.valueLi}">${esc(f)}</li>`).join("")}</ul>` : mutedSpan("none"))}
       ${row(g.copies > 1 ? `Path (×${g.copies} identical installs)` : "Path", `<ul class="${C.valueList}">${paths}</ul><button class="mini-btn ${C.miniBtn}" data-action="editor" data-dir="${esc(s.dir)}">Open in Cursor</button>`)}
       ${(overlapLinks || dupLine) ? row("Overlaps with", `<ul class="${C.valueList}">${dupLine}${overlapLinks}</ul>`) : ""}
+      ${row("Source", `<span id="source-live">…</span>`)}
+      ${row("Used by", usedBy)}
       ${row("Version / lock", lockHtml)}
       ${row("Size", `~${s.tokens} tokens · ${s.sections.length} sections`)}
     </div>
     <article class="body-sections md-body ${MARKDOWN_ROOT}"></article>`;
   const article = body.querySelector(".md-body");
   withRaw(article, s, (raw) => { article.innerHTML = renderSkillMarkdown(raw); });
+
+  const sourceEl = body.querySelector("#source-live");
+  window.typecase.source(s.dir).then(
+    (src) => {
+      if (!sourceEl.isConnected) return;
+      sourceEl.innerHTML =
+        src.kind === "git"
+          ? `${esc(src.remote ?? "git")} <span class="mono ${C.mono}">@ ${esc((src.commit ?? "").slice(0, 7))}${src.ref && src.ref !== src.commit ? ` (${esc(src.ref)})` : ""}</span>`
+          : src.kind === "plugin"
+            ? `plugin ${esc(src.name ?? "")} <span class="mono ${C.mono}">v${esc(src.version ?? "?")}</span>`
+            : `<span class="${C.rowValueMuted}">local folder (not under git)</span>`;
+    },
+    () => { if (sourceEl.isConnected) sourceEl.textContent = "unknown"; },
+  );
 }
 
 function openMarkdownLink(href) {

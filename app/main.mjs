@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, shell, nativeTheme } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell, nativeTheme } from "electron";
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, watch } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -11,7 +12,10 @@ const libURL = app.isPackaged
   ? pathToFileURL(path.join(process.resourcesPath, "lib") + path.sep)
   : new URL("../scripts/lib/", import.meta.url);
 const { discover, displayGroups } = await import(new URL("discover.mjs", libURL).href);
-const { readLock, diffAgainstLock, LOCKFILE, CHANGELOG } = await import(new URL("lockfile.mjs", libURL).href);
+const { readLock, diffAgainstLock, LOCKFILE, CHANGELOG, sourceOf } = await import(new URL("lockfile.mjs", libURL).href);
+const { configuredLibraryDir } = await import(new URL("mcp-serve.mjs", libURL).href);
+const { writeMcpConfig } = await import(new URL("connect.mjs", libURL).href);
+const { writeMirror, watchMirror } = await import(new URL("mirror.mjs", libURL).href);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workdir = process.env.TYPECASE_CWD ?? process.cwd();
@@ -113,6 +117,48 @@ ipcMain.handle("typecase:open-editor", (_e, file) => {
     child.unref();
   };
   tryNext(0);
+});
+
+ipcMain.handle("typecase:source", (_e, dir) => sourceOf({ dir }));
+
+// The library is the one folder (usually a checkout of your skills repo)
+// that Connect and Mirror act on. First use asks for it, then it is
+// remembered in ~/.config/typecase/typecase.json.
+async function pickLibraryDir() {
+  const configured = configuredLibraryDir({ cwd: workdir });
+  if (configured && existsSync(configured)) return configured;
+  const res = await dialog.showOpenDialog(win, {
+    title: "Choose your skills library folder (a checkout of your skills repo)",
+    properties: ["openDirectory"],
+  });
+  if (res.canceled || !res.filePaths[0]) return null;
+  const chosen = res.filePaths[0];
+  const cfgFile = path.join(process.env.TYPECASE_HOME ?? homedir(), ".config", "typecase", "typecase.json");
+  let cfg = {};
+  if (existsSync(cfgFile)) {
+    try { cfg = JSON.parse(readFileSync(cfgFile, "utf8")); } catch {}
+  }
+  cfg.library = { ...cfg.library, dir: chosen };
+  mkdirSync(path.dirname(cfgFile), { recursive: true });
+  writeFileSync(cfgFile, JSON.stringify(cfg, null, 2) + "\n");
+  return chosen;
+}
+
+ipcMain.handle("typecase:connect", async (_e, target) => {
+  const libraryDir = await pickLibraryDir();
+  if (!libraryDir) return { canceled: true };
+  const res = writeMcpConfig(target, libraryDir, { preferNpx: app.isPackaged });
+  return { ...res, libraryDir };
+});
+
+let mirrorWatcher = null;
+ipcMain.handle("typecase:mirror", async () => {
+  const libraryDir = await pickLibraryDir();
+  if (!libraryDir) return { canceled: true };
+  const summary = await writeMirror(libraryDir);
+  // Keep the mirror fresh while the app is open.
+  if (!mirrorWatcher) mirrorWatcher = watchMirror(libraryDir, { onUpdate: () => win?.webContents.send("skills-changed") });
+  return summary;
 });
 
 app.whenReady().then(() => {

@@ -121,3 +121,13 @@ test("sidebar tool filter narrows the row list", async () => {
   await expect(page.locator(".skill-row:visible")).toHaveCount(1);
   await expect(page.locator(".skill-row:visible .r-name")).toHaveText("beta-notes");
 });
+
+test("detail shows Source and Used by; sidebar has the Serve actions", async () => {
+  await page.locator(".skill-row:visible", { hasText: "beta-notes" }).click();
+  await expect(page.locator(".detail-hero")).toHaveText("beta-notes");
+  // Fixture skills are plain folders, not git checkouts or plugins.
+  await expect(page.locator(".row", { hasText: "Source" })).toContainText("local folder");
+  await expect(page.locator(".row", { hasText: "Used by" })).toContainText("Claude Code");
+  await expect(page.locator(".serve-item")).toHaveCount(3);
+  await expect(page.locator('.serve-item[data-serve="cursor"]')).toContainText("Write Cursor MCP config");
+});

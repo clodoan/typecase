@@ -14,9 +14,8 @@ import { home } from "./paths.mjs";
 
 export const SERVER_VERSION = "0.2.0";
 
-/** --library beats TYPECASE_LIBRARY beats typecase.json `library.dir` beats cwd. */
-export function resolveLibraryDir({ cwd = process.cwd(), flag = null } = {}) {
-  if (flag) return path.resolve(cwd, flag);
+/** The library dir named by TYPECASE_LIBRARY or a typecase.json, else null. */
+export function configuredLibraryDir({ cwd = process.cwd() } = {}) {
   if (process.env.TYPECASE_LIBRARY) return path.resolve(process.env.TYPECASE_LIBRARY);
   for (const cfg of [path.join(cwd, "typecase.json"), path.join(home(), ".config", "typecase", "typecase.json")]) {
     if (!existsSync(cfg)) continue;
@@ -25,7 +24,13 @@ export function resolveLibraryDir({ cwd = process.cwd(), flag = null } = {}) {
       if (parsed.library?.dir) return path.resolve(path.dirname(cfg), parsed.library.dir);
     } catch {}
   }
-  return cwd;
+  return null;
+}
+
+/** --library beats TYPECASE_LIBRARY beats typecase.json `library.dir` beats cwd. */
+export function resolveLibraryDir({ cwd = process.cwd(), flag = null } = {}) {
+  if (flag) return path.resolve(cwd, flag);
+  return configuredLibraryDir({ cwd }) ?? cwd;
 }
 
 function makeLibrary({ repo, libraryDir }) {
