@@ -634,7 +634,7 @@ function renderTabRendered(body, g, s) {
       if (!sourceEl.isConnected) return;
       sourceEl.innerHTML =
         src.kind === "git"
-          ? `${esc(src.remote ?? "git")} <span class="mono ${C.mono}">@ ${esc((src.commit ?? "").slice(0, 7))}${src.ref && src.ref !== src.commit ? ` (${esc(src.ref)})` : ""}</span>`
+          ? `${esc(src.remote ?? "git")} <span class="mono ${C.mono}">@ ${esc((src.commit ?? "").slice(0, 7))}${src.ref && !(src.commit ?? "").startsWith(src.ref) ? ` (${esc(src.ref)})` : ""}</span>`
           : src.kind === "plugin"
             ? `plugin ${esc(src.name ?? "")} <span class="mono ${C.mono}">v${esc(src.version ?? "?")}</span>`
             : `<span class="${C.rowValueMuted}">local folder (not under git)</span>`;

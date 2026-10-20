@@ -21,12 +21,18 @@ function tryGit(dir, args) {
   }
 }
 
+// Remote URLs can embed credentials (https://user:token@host/...); those
+// must never reach skills.lock or the UI.
+function redactRemote(remote) {
+  return remote ? remote.replace(/^([a-z][\w+.-]*:\/\/)[^/@]+@/i, "$1") : remote;
+}
+
 export function sourceOf(skill) {
   const commit = tryGit(skill.dir, ["rev-parse", "HEAD"]);
   if (commit) {
     return {
       kind: "git",
-      remote: tryGit(skill.dir, ["remote", "get-url", "origin"]) ?? null,
+      remote: redactRemote(tryGit(skill.dir, ["remote", "get-url", "origin"])) ?? null,
       commit,
       ref: tryGit(skill.dir, ["describe", "--tags", "--always"]),
     };

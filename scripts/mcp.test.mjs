@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, statSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,6 +11,7 @@ import { createMcpHandler, handleHttpMcp } from "./lib/mcp-core.mjs";
 import { runMcp } from "./lib/mcp-serve.mjs";
 import { writeMirror, removeMirror, MIRROR_MARKER } from "./lib/mirror.mjs";
 import { writeCursorMcpConfig, writeGrokMcpConfig } from "./lib/connect.mjs";
+import { sourceOf } from "./lib/lockfile.mjs";
 import { promptName } from "./lib/skill-text.mjs";
 
 function makeLibraryDir() {
@@ -176,6 +178,22 @@ test("connect writes Cursor mcp.json and Grok config.toml without clobbering", (
   assert.match(toml, /\[mcp_servers\.other\]/);
   assert.equal(toml.match(/\[mcp_servers\.typecase\]/g).length, 1, "replaced, not duplicated");
   assert.match(toml, /--library", "\/tmp\/lib2/);
+});
+
+test("sourceOf redacts credentials embedded in git remotes", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), "typecase-remote-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const git = (...args) => execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
+  git("init", "-q");
+  git("config", "user.email", "t@t");
+  git("config", "user.name", "t");
+  writeFileSync(path.join(dir, "SKILL.md"), "x\n");
+  git("add", "."); git("commit", "-qm", "x");
+  git("remote", "add", "origin", "https://x-access-token:ghs_secret123@github.com/o/r.git");
+  const src = sourceOf({ dir });
+  assert.equal(src.kind, "git");
+  assert.equal(src.remote, "https://github.com/o/r.git");
+  assert.ok(!JSON.stringify(src).includes("ghs_secret123"));
 });
 
 test("mirror writes read-only marked copies, prunes, never clobbers", async (t) => {
