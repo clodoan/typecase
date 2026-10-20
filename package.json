@@ -21,5 +21,8 @@
   },
   "scripts": {
     "test": "node --test scripts/typecase.test.mjs scripts/mcp.test.mjs"
+  },
+  "dependencies": {
+    "wrangler": "^4.151.3"
   }
 }
