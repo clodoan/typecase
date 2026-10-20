@@ -1,0 +1,14 @@
+{
+  "name": "typecase-mcp-worker",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Typecase skills MCP server on your own Cloudflare Worker",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.48.0"
+  }
+}

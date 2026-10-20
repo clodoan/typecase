@@ -12,6 +12,9 @@ import {
   LOCKFILE, CHANGELOG, writeLock, readLock, diffAgainstLock, appendChangelog, pin,
 } from "./lib/lockfile.mjs";
 import { htmlReader } from "./lib/html-reader.mjs";
+import { runMcp, resolveLibraryDir } from "./lib/mcp-serve.mjs";
+import { writeMirror, removeMirror, watchMirror, mirrorTargets } from "./lib/mirror.mjs";
+import { writeMcpConfig } from "./lib/connect.mjs";
 
 const EXIT_OK = 0;
 const EXIT_DIFFS = 1;
@@ -38,6 +41,11 @@ Commands:
   lock [--no-snapshot]                 write ${LOCKFILE} (+ folder snapshots for pin)
   diff [--write-changelog]             what changed since ${LOCKFILE}, one paragraph per skill
   pin <skill>                          restore the locked version of a skill
+  mcp [--library d | --repo o/r] [--http [port]]
+                                       serve the skills library over MCP (stdio default)
+  mirror [--library d] [--watch|--remove]
+                                       generated read-only copy into ~/.{grok,cursor,claude,codex}/skills
+  connect <cursor|grok> [--library d]  write the typecase MCP server into that tool's config
   -h, --help
 
 Set TYPECASE_LLM_CMD to generate diff paragraphs with an LLM (stdin: change
@@ -246,6 +254,39 @@ function cmdOpen() {
   spawn(opener, [file], { detached: true, stdio: "ignore" }).on("error", () => {});
 }
 
+function mirrorLine(summary) {
+  const skipped = summary.skipped.length ? c.yellow(` (${summary.skipped.length} skipped: ${summary.skipped.map((s) => s.reason)[0]})`) : "";
+  return `${c.green("mirrored")} ${summary.skills} skills from ${summary.source} → ${summary.targets.length} folders` +
+    `${summary.pruned ? c.dim(` (pruned ${summary.pruned})`) : ""}${skipped}`;
+}
+
+async function cmdMirror(args) {
+  const watchFlag = flag(args, "--watch");
+  const remove = flag(watchFlag.args, "--remove");
+  const lib = opt(remove.args, "--library");
+  if (remove.present) {
+    const res = removeMirror();
+    console.log(`${c.green("removed")} ${res.removed} mirrored skill folder(s) from ${mirrorTargets().map((t) => t.dir).join(", ")}`);
+    return;
+  }
+  const libraryDir = resolveLibraryDir({ flag: lib.value });
+  if (watchFlag.present) {
+    watchMirror(libraryDir, { onUpdate: (s) => console.log(s.error ? c.red(s.error) : mirrorLine(s)) });
+    console.log(c.dim(`watching ${libraryDir} — Ctrl-C to stop`));
+    return;
+  }
+  console.log(mirrorLine(await writeMirror(libraryDir)));
+}
+
+function cmdConnect(args) {
+  const lib = opt(args, "--library");
+  const target = lib.args[0];
+  if (!target) throw new UsageError("connect needs a target: cursor or grok");
+  const res = writeMcpConfig(target, resolveLibraryDir({ flag: lib.value }));
+  console.log(`${c.green("connected")} ${target} → ${res.file}`);
+  console.log(c.dim(`  ${res.server.command} ${res.server.args.join(" ")}`));
+}
+
 class UsageError extends Error {}
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -258,6 +299,9 @@ try {
     case "diff": cmdDiff(rest); break;
     case "pin": cmdPin(rest); break;
     case "open": cmdOpen(rest); break;
+    case "mcp": runMcp(rest); break;
+    case "mirror": await cmdMirror(rest); break;
+    case "connect": cmdConnect(rest); break;
     case "-h":
     case "--help":
     case undefined:

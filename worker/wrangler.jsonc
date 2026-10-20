@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "typecase-mcp",
+  "main": "index.mjs",
+  "compatibility_date": "2026-10-01",
+  "vars": {
+    // Point this at YOUR skills repo (or pass --var SKILLS_REPO:you/skills).
+    "SKILLS_REPO": "clodoan/skills"
+    // "SKILLS_REF": "main",
+    // "SKILLS_DIR": "skills"
+  },
+  "observability": { "enabled": true }
+}
