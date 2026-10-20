@@ -14,6 +14,7 @@ import {
 import { htmlReader } from "./lib/html-reader.mjs";
 import { runMcp, resolveLibraryDir } from "./lib/mcp-serve.mjs";
 import { writeMirror, removeMirror, watchMirror, mirrorTargets } from "./lib/mirror.mjs";
+import { writeMcpConfig } from "./lib/connect.mjs";
 
 const EXIT_OK = 0;
 const EXIT_DIFFS = 1;
@@ -44,6 +45,7 @@ Commands:
                                        serve the skills library over MCP (stdio default)
   mirror [--library d] [--watch|--remove]
                                        generated read-only copy into ~/.{grok,cursor,claude,codex}/skills
+  connect <cursor|grok> [--library d]  write the typecase MCP server into that tool's config
   -h, --help
 
 Set TYPECASE_LLM_CMD to generate diff paragraphs with an LLM (stdin: change
@@ -276,6 +278,15 @@ async function cmdMirror(args) {
   console.log(mirrorLine(await writeMirror(libraryDir)));
 }
 
+function cmdConnect(args) {
+  const lib = opt(args, "--library");
+  const target = lib.args[0];
+  if (!target) throw new UsageError("connect needs a target: cursor or grok");
+  const res = writeMcpConfig(target, resolveLibraryDir({ flag: lib.value }));
+  console.log(`${c.green("connected")} ${target} → ${res.file}`);
+  console.log(c.dim(`  ${res.server.command} ${res.server.args.join(" ")}`));
+}
+
 class UsageError extends Error {}
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -290,6 +301,7 @@ try {
     case "open": cmdOpen(rest); break;
     case "mcp": runMcp(rest); break;
     case "mirror": await cmdMirror(rest); break;
+    case "connect": cmdConnect(rest); break;
     case "-h":
     case "--help":
     case undefined:

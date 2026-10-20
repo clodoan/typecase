@@ -9,6 +9,7 @@ import { createGithubLibrary } from "./lib/library-github.mjs";
 import { createMcpHandler, handleHttpMcp } from "./lib/mcp-core.mjs";
 import { runMcp } from "./lib/mcp-serve.mjs";
 import { writeMirror, removeMirror, MIRROR_MARKER } from "./lib/mirror.mjs";
+import { writeCursorMcpConfig, writeGrokMcpConfig } from "./lib/connect.mjs";
 import { promptName } from "./lib/skill-text.mjs";
 
 function makeLibraryDir() {
@@ -149,6 +150,32 @@ test("github library serves a repo through a stubbed fetch", async () => {
   assert.equal((await lib.readFile("chip", "refs/sizes.md")).text, "- 16:9\n");
   await assert.rejects(() => lib.readFile("chip", "../other"), /outside/);
   assert.throws(() => createGithubLibrary({ repo: "not a repo" }), /owner\/repo/);
+});
+
+test("connect writes Cursor mcp.json and Grok config.toml without clobbering", (t) => {
+  const fakeHome = mkdtempSync(path.join(tmpdir(), "typecase-connect-"));
+  process.env.TYPECASE_HOME = fakeHome;
+  delete process.env.GROK_HOME;
+  t.after(() => { delete process.env.TYPECASE_HOME; rmSync(fakeHome, { recursive: true, force: true }); });
+
+  // Existing Cursor config with another server survives the merge.
+  mkdirSync(path.join(fakeHome, ".cursor"), { recursive: true });
+  writeFileSync(path.join(fakeHome, ".cursor", "mcp.json"), JSON.stringify({ mcpServers: { other: { url: "https://x/mcp" } } }));
+  const cursor = writeCursorMcpConfig("/tmp/lib");
+  const parsed = JSON.parse(readFileSync(cursor.file, "utf8"));
+  assert.ok(parsed.mcpServers.other, "pre-existing server kept");
+  assert.deepEqual(parsed.mcpServers.typecase.args.slice(-2), ["--library", "/tmp/lib"]);
+
+  // Grok config: section appended, then replaced in place on re-run.
+  mkdirSync(path.join(fakeHome, ".grok"), { recursive: true });
+  writeFileSync(path.join(fakeHome, ".grok", "config.toml"), "[models]\ndefault = \"grok-4\"\n\n[mcp_servers.other]\nurl = \"https://x/mcp\"\n");
+  writeGrokMcpConfig("/tmp/lib");
+  const grok = writeGrokMcpConfig("/tmp/lib2");
+  const toml = readFileSync(grok.file, "utf8");
+  assert.match(toml, /\[models\]/);
+  assert.match(toml, /\[mcp_servers\.other\]/);
+  assert.equal(toml.match(/\[mcp_servers\.typecase\]/g).length, 1, "replaced, not duplicated");
+  assert.match(toml, /--library", "\/tmp\/lib2/);
 });
 
 test("mirror writes read-only marked copies, prunes, never clobbers", async (t) => {
