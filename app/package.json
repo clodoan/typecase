@@ -24,7 +24,7 @@
     "electron": "^44.7.2",
     "electron-builder": "^26.15.3",
     "markdown-it": "^14.3.2",
-    "rollup": "^4.64.6"
+    "rollup": "^4.64.12"
   },
   "build": {
     "appId": "dev.clodoan.typecase",
