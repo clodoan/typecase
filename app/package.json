@@ -21,7 +21,7 @@
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@stylexjs/rollup-plugin": "^0.19.1",
     "@stylexjs/stylex": "^0.19.1",
-    "electron": "^44.7.2",
+    "electron": "^45.0.0",
     "electron-builder": "^26.15.3",
     "markdown-it": "^14.3.2",
     "rollup": "^4.64.6"
