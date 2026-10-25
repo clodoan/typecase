@@ -23,7 +23,7 @@
     "@stylexjs/stylex": "^0.19.1",
     "electron": "^44.7.2",
     "electron-builder": "^26.15.3",
-    "markdown-it": "^14.3.2",
+    "markdown-it": "^15.0.3",
     "rollup": "^4.64.6"
   },
   "build": {
