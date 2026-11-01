@@ -73,9 +73,9 @@ const boot = await page.evaluate(() => window.__perf ?? null);
 const rowCount = await page.locator(".skill-row").count();
 
 const clickAndMeasure = (wanted) => page.evaluate(async (label) => {
-  const items = [...document.querySelectorAll(".filter-chip")];
+  const items = [...document.querySelectorAll(".nav-item")];
   const target = items.find((el) => el.textContent.includes(label));
-  if (!target) throw new Error(`filter chip not found: ${label}`);
+  if (!target) throw new Error(`nav item not found: ${label}`);
   const stats = window.__renderStats ?? { count: 0 };
   const start = stats.count;
   target.click();
@@ -90,16 +90,16 @@ const reRender = async (label) => {
   const runs = [];
   for (let i = 0; i < 7; i++) {
     runs.push(await clickAndMeasure(label));
-    await clickAndMeasure(label === "All" ? "Cursor" : "All");
+    await clickAndMeasure(label === "All Skills" ? "Cursor" : "All Skills");
   }
   return runs;
 };
 
 const toolFilter = await reRender("Cursor");
-// reRender("Cursor") ends on All; clicking the active chip is a no-op, so
-// step to Cursor first or the first "All" click never renders.
+// reRender("Cursor") ends on All; clicking the active item is a no-op, so
+// step to Cursor first or the first "All Skills" click never renders.
 await clickAndMeasure("Cursor");
-const backToAll = await reRender("All");
+const backToAll = await reRender("All Skills");
 
 console.log(JSON.stringify({
   home,

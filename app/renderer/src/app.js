@@ -9,10 +9,12 @@ import { darkTheme } from "./themes.mjs";
 const cx = (...xs) => stylex.attrs(...xs).class ?? "";
 
 const C = {
-  chip: cx(styles.control, styles.controlText, styles.item, styles.chip),
-  chipActive: cx(styles.control, styles.controlText, styles.item, styles.itemActive, styles.chip),
-  chipCount: cx(styles.chipCount),
-  chipIcon: cx(styles.chipIcon),
+  navItem: cx(styles.navItem, styles.item),
+  navItemActive: cx(styles.navItem, styles.item, styles.itemActive),
+  navLabel: cx(styles.navLabel),
+  navCount: cx(styles.navCount),
+  navIcon: cx(styles.navIcon),
+  navSep: cx(styles.navSep),
 
   countHead: cx(styles.countHead),
   countH1: cx(styles.countHeadH1),
@@ -33,7 +35,6 @@ const C = {
   detail: cx(styles.detail),
   detailHero: cx(styles.detailHero),
   detailSub: cx(styles.detailSub),
-  detailBadges: cx(styles.detailBadges),
 
   rows: cx(styles.rows),
   row: cx(styles.row),
@@ -47,7 +48,10 @@ const C = {
   toolChips: cx(styles.toolChips),
   toolChip: cx(styles.toolChip),
   pathRow: cx(styles.pathRow),
-  miniBtn: cx(styles.miniBtn),
+  linkBtn: cx(styles.linkBtn),
+  section: cx(styles.section),
+  sectionTitle: cx(styles.sectionTitle),
+  warn: cx(styles.warn),
   linkSkill: cx(styles.linkSkill),
 
   sourceBlock: cx(styles.sourceBlock),
@@ -90,14 +94,15 @@ const TOOL_ICONS = {
   codex: '<svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-codex"/></svg>',
   shared: '<svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-shared"/></svg>',
 };
-const FLAG_ICONS = {
+const NAV_ICONS = {
+  all: '<svg viewBox="0 0 16 16" width="13" height="13"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
   changed: '<svg viewBox="0 0 16 16" width="13" height="13"><path d="M13 8A5 5 0 1 1 8 3h3M9 1l2.2 2L9 5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   unused: '<svg viewBox="0 0 16 16" width="13" height="13"><circle cx="8" cy="8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.2 2"/></svg>',
   overlaps: '<svg viewBox="0 0 16 16" width="13" height="13"><circle cx="6" cy="8" r="3.8" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="8" r="3.8" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
 };
 
-// Two filters only: one tool (or all), plus at most one flag that narrows
-// it further.
+// The sidebar is one short list with a single selection: All, the flags
+// that match something, then the tools that have skills.
 const FLAGS = [
   { id: "unused", label: "Unused", title: `No uses in the last ${WINDOW_DAYS} days (Claude Code and Codex logs)` },
   { id: "changed", label: "Changed", title: "Changed since skills.lock" },
@@ -126,17 +131,23 @@ const keyOf = (s) => `${s.tool}:${s.scope}:${s.name}:${s.path}`;
 const lockKeyOf = (s) => `${s.tool}:${s.scope}:${s.name}`; // matches lockfile.mjs keyOf
 
 let isMac = false;
+let sidebarHidden = false;
 
 function applyShellStyles() {
   document.body.className = cx(styles.body);
   $("#app").className = "app " + cx(styles.app);
+  $("#sidebar").className = "sidebar " + cx(styles.sidebar, sidebarHidden && styles.sidebarHidden);
   document.querySelector(".app-drag").className = "app-drag " + cx(styles.appDrag);
+  document.querySelector(".sidebar-drag").className = "sidebar-drag " + cx(styles.sidebarDrag);
+  $("#sidenav").className = "sidenav " + cx(styles.sidenav);
   $("#main").className = "main " + cx(styles.main);
   $("#main-drag").className = "main-drag " + cx(styles.mainDrag);
   syncToolbar();
-  $("#filters").className = "tb-filters " + cx(styles.tbFilters);
+  $("#toggle-sidebar").className = "tb-btn " + C.tbBtn;
+  $("#toggle-sidebar").title = `Toggle sidebar (${shortcutText("toggleSidebar")})`;
   $("#back-btn").title = `Back (${shortcutText("back")})`;
   $("#search-pill kbd").textContent = shortcutText("search");
+  $("#back-group").className = "tb-group back-group " + cx(styles.backGroup);
   $("#back-btn").className = "tb-btn back-btn " + C.tbBtn;
   document.querySelector(".tb-spacer").className = "tb-spacer " + cx(styles.tbSpacer);
   $("#search-pill").className = "search-pill " + cx(styles.control, styles.controlText, styles.item, styles.searchPill);
@@ -151,7 +162,7 @@ function applyShellStyles() {
 }
 
 function syncToolbar() {
-  $("#toolbar").className = "toolbar " + cx(styles.toolbar, isMac && styles.toolbarBesideLights);
+  $("#toolbar").className = "toolbar " + cx(styles.toolbar, isMac && sidebarHidden && styles.toolbarBesideLights);
 }
 
 function syncSegmented() {
@@ -262,59 +273,59 @@ function fuzzyScore(query, s) {
   return hits === words.length ? 8 : hits > 0 ? 2 : -1;
 }
 
-function chipButton({ filter, icon, label, count, title }) {
-  return `<button class="filter-chip" data-filter="${esc(filter)}"${title ? ` title="${esc(title)}"` : ""}>` +
-    (icon ? `<span class="${C.chipIcon}">${icon}</span>` : "") +
-    `<span>${esc(label)}</span><span class="count ${C.chipCount}">${count}</span></button>`;
+function navButton({ nav, icon, label, count, title }) {
+  return `<button class="nav-item ${C.navItem}" data-nav="${esc(nav)}"${title ? ` title="${esc(title)}"` : ""}>
+    <span class="${C.navIcon}">${icon ?? ""}</span><span class="${C.navLabel}">${esc(label)}</span><span class="count ${C.navCount}">${count}</span>
+  </button>`;
 }
 
-// A flag only shows when it would match something, so no chip leads to an
+// A flag only shows when it would match something, so no item leads to an
 // empty list. Changed also needs a lockfile to mean anything.
 function flagAvailable(id) {
   if (id === "changed" && !data.lock) return false;
   return model.counts[id] > 0;
 }
 
-function renderFilters() {
+function renderSidebar() {
   const { counts } = model;
-  // Drop a filter whose chip has disappeared (files changed on disk).
+  // Drop a selection whose item has disappeared (files changed on disk).
   if (state.tool && !counts.tools.get(state.tool)) state.tool = null;
   if (state.flag && !flagAvailable(state.flag)) state.flag = null;
 
-  let html = chipButton({ filter: "all", label: "All", count: counts.all });
+  let html = navButton({ nav: "all", icon: NAV_ICONS.all, label: "All Skills", count: counts.all });
+  for (const f of FLAGS.filter((x) => flagAvailable(x.id))) {
+    html += navButton({ nav: `flag:${f.id}`, icon: NAV_ICONS[f.id], label: f.label, count: counts[f.id], title: f.title });
+  }
+  html += `<div class="${C.navSep}" aria-hidden="true"></div>`;
   for (const t of TOOLS) {
     const count = counts.tools.get(t.id) ?? 0;
-    if (count) html += chipButton({ filter: `tool:${t.id}`, icon: TOOL_ICONS[t.id], label: t.label, count });
+    if (count) html += navButton({ nav: `tool:${t.id}`, icon: TOOL_ICONS[t.id], label: t.label, count });
   }
-  const flags = FLAGS.filter((f) => flagAvailable(f.id));
-  if (flags.length) html += `<div class="tb-sep ${cx(styles.tbSep)}"></div>`;
-  for (const f of flags) {
-    html += chipButton({ filter: `flag:${f.id}`, icon: FLAG_ICONS[f.id], label: f.label, count: counts[f.id], title: f.title });
-  }
-  $("#filters").innerHTML = html;
-  syncFilters();
+  $("#sidenav").innerHTML = html;
+  syncSidebar();
 }
 
-function syncFilters() {
-  for (const el of document.querySelectorAll("#filters .filter-chip")) {
-    const [kind, id] = el.dataset.filter.split(":");
+function syncSidebar() {
+  for (const el of document.querySelectorAll("#sidenav .nav-item")) {
+    const [kind, id] = el.dataset.nav.split(":");
     const active =
       kind === "all" ? !state.tool && !state.flag
       : kind === "tool" ? state.tool === id
       : state.flag === id;
-    el.className = "filter-chip " + (active ? C.chipActive : C.chip);
-    el.setAttribute("aria-pressed", String(active));
+    el.className = "nav-item " + (active ? C.navItemActive : C.navItem);
+    if (active) el.setAttribute("aria-current", "true");
+    else el.removeAttribute("aria-current");
   }
 }
 
-$("#filters").addEventListener("click", (e) => {
-  const chip = e.target.closest(".filter-chip");
-  if (!chip) return;
-  const [kind, id] = chip.dataset.filter.split(":");
+$("#sidenav").addEventListener("click", (e) => {
+  const item = e.target.closest(".nav-item");
+  if (!item) return;
+  const [kind, id] = item.dataset.nav.split(":");
   const list = { view: "grid", groupKey: null };
   if (kind === "all") navigate({ ...list, tool: null, flag: null });
-  else if (kind === "tool") navigate({ ...list, tool: state.tool === id ? null : id });
-  else navigate({ ...list, flag: state.flag === id ? null : id });
+  else if (kind === "tool") navigate({ ...list, tool: id, flag: null });
+  else navigate({ ...list, tool: null, flag: id });
 });
 
 function toolLabel(id) { return TOOLS.find((t) => t.id === id)?.label ?? id; }
@@ -380,12 +391,12 @@ function renderRows() {
   }
 
   headEl.textContent = `${groups.length} Skill${groups.length === 1 ? "" : "s"}`;
-  subEl.textContent = [
-    state.tool ? toolLabel(state.tool) : "All",
-    state.flag ? FLAGS.find((f) => f.id === state.flag).title : "",
-  ].filter(Boolean).join(" · ");
+  subEl.textContent =
+    state.tool ? toolLabel(state.tool)
+    : state.flag ? FLAGS.find((f) => f.id === state.flag).title
+    : "All";
   emptyEl.hidden = groups.length > 0;
-  if (!groups.length) emptyEl.textContent = "No skills match these filters. Click All to clear them.";
+  if (!groups.length) emptyEl.textContent = "No skills here.";
 
   const content = $("#content");
   if (wrapEl.parentNode !== content) content.replaceChildren(wrapEl);
@@ -426,7 +437,7 @@ function currentLocation() {
 function showLocation(loc) {
   for (const k of LOCATION_KEYS) state[k] = loc[k];
   Object.assign(state, { tab: "rendered", focusIndex: -1 });
-  syncFilters();
+  syncSidebar();
   renderContent();
   $("#content").scrollTop = loc.scrollTop ?? 0;
 }
@@ -471,7 +482,6 @@ function renderDetail() {
   $("#content").innerHTML = `<div class="detail ${C.detail}">
     <div class="detail-hero ${C.detailHero}">${esc(s.name)}</div>
     <div class="detail-sub ${C.detailSub}">${esc(s.description || "")}</div>
-    <div class="detail-badges ${C.detailBadges}">${badgesHtml(g)}</div>
     <div id="tab-body"></div>
   </div>`;
   renderTab();
@@ -518,9 +528,9 @@ function renderTabRendered(body, g, s) {
     const otherGroup = model.groups.find((x) => x.installs.some((inst) => inst.path === other.path));
     const ou = otherGroup?.usage;
     const versus = ou?.tracked && g.usage?.tracked
-      ? ` · <strong>${ou.recent}</strong> vs <strong>${g.usage.recent}</strong> here, last ${ou.windowDays}d`
+      ? `, used ${ou.recent}× vs ${g.usage.recent}× for this one in ${ou.windowDays} days`
       : "";
-    return `<li class="${C.valueLi}"><a class="link-skill ${C.linkSkill}" data-action="goto" data-key="${esc(otherGroup?.key ?? "")}">${esc(other.name)}</a> <span class="${C.monoDim}">(${Math.round(o.score * 100)}% shared vocabulary, ${esc(other.tool)})</span>${versus}</li>`;
+    return `<li class="${C.valueLi}"><a class="link-skill ${C.linkSkill}" data-action="goto" data-key="${esc(otherGroup?.key ?? "")}">${esc(other.name)}</a> <span class="${C.rowValueMuted}">${Math.round(o.score * 100)}% similar triggers${versus}</span></li>`;
   }).join("");
   const collision = data.duplicates.find((d) => !d.identical && d.name === s.name);
   const dupLine = collision
@@ -528,30 +538,46 @@ function renderTabRendered(body, g, s) {
     : "";
 
   const lockEntry = data.lock?.skills?.[lockKeyOf(s)];
-  const lockHtml = lockEntry
-    ? `locked <span class="mono ${C.mono}">${esc(lockEntry.hash.slice(0, 12))}</span>${lockEntry.hash === s.hash ? " · unchanged" : ` · now <span class="mono ${C.mono}">${esc(s.hash.slice(0, 12))}</span> (drifted)`}${lockEntry.source?.kind === "git" ? ` · ${esc(lockEntry.source.remote ?? "git")}@${esc((lockEntry.source.commit ?? "").slice(0, 7))}` : lockEntry.source?.version ? ` · v${esc(lockEntry.source.version)}` : ""}`
-    : `not locked — run <code>typecase lock</code>`;
+  const lockText = !lockEntry ? ""
+    : lockEntry.hash === s.hash ? `locked at <span class="${C.mono}">${esc(lockEntry.hash.slice(0, 12))}</span>`
+    : `changed since lock (<span class="${C.mono}">${esc(lockEntry.hash.slice(0, 12))}</span> → <span class="${C.mono}">${esc(s.hash.slice(0, 12))}</span>)`;
+  const sourceText = lockEntry?.source?.kind === "git"
+    ? `from ${esc(lockEntry.source.remote ?? "git")}@${esc((lockEntry.source.commit ?? "").slice(0, 7))}`
+    : lockEntry?.source?.version ? `v${esc(lockEntry.source.version)}` : "";
 
-  const paths = g.installs.map((inst) => `
-    <li class="${C.pathRow}"><span class="mono ${C.mono}">${esc(inst.path)}</span>
-      <button class="mini-btn ${C.miniBtn}" data-action="reveal" data-path="${esc(inst.path)}">Reveal in Finder</button>
-    </li>`).join("");
+  // One install: the path, then its actions on one line. Several: each
+  // path gets its own Reveal.
+  const reveal = (p, label) => `<button class="${C.linkBtn}" data-action="reveal" data-path="${esc(p)}">${label}</button>`;
+  const many = g.installs.length > 1;
+  const paths = g.installs.map((inst) =>
+    `<li class="${C.pathRow}"><span class="mono ${C.mono}">${esc(inst.path)}</span>${many ? reveal(inst.path, "Reveal") : ""}</li>`).join("");
+  const actions = [
+    many ? "" : reveal(s.path, "Reveal in Finder"),
+    `<button class="${C.linkBtn}" data-action="editor" data-dir="${esc(s.dir)}">Open in Cursor</button>`,
+  ].filter(Boolean).join(`<span class="${C.rowValueMuted}"> · </span>`);
 
-  const mutedSpan = (t) => `<span class="${C.rowValueMuted}">${t}</span>`;
+  // Triggers are usually the description plus "When to use"; only show
+  // them when they say something those two don't.
+  const flat = (t) => String(t ?? "").replace(/\s+/g, " ").trim();
+  const triggersNew = s.triggers && !flat(`${s.description} ${whenUse}`).includes(flat(s.triggers));
+
+  // One pattern for the whole view: titled sections of label/value rows.
+  // Rows with nothing to say are left out rather than shown as "none".
+  const details = [
+    whenUse ? row("When to use", esc(whenUse)) : "",
+    triggersNew ? row("Triggers", esc(s.triggers)) : "",
+    s.whenNot ? row("When not to use", esc(s.whenNot)) : "",
+    toolChips || riskyOnly ? row("Tools it can call", `<div class="${C.toolChips}">${toolChips}${riskyOnly}</div>`) : "",
+    s.files.length ? row("Files", `<ul class="${C.valueList}">${s.files.map((f) => `<li class="mono ${C.mono} ${C.valueLi}">${esc(f)}</li>`).join("")}</ul>`) : "",
+    (overlapLinks || dupLine) ? row("Overlaps with", `<ul class="${C.valueList}">${dupLine}${overlapLinks}</ul>`) : "",
+    row(g.copies > 1 ? `Installed ×${g.copies}` : "Installed at", `<ul class="${C.valueList}">${paths}</ul><div>${actions}</div>`),
+    row("Size", `~${s.tokens} tokens · ${plural(s.sections.length, "section")}`),
+    lockText ? row("Lock", [lockText, sourceText].filter(Boolean).join(" · ")) : "",
+  ];
   body.innerHTML = `
-    <div class="rows ${C.rows}">
-      ${row("Usage", usageHtml(g, s))}
-      ${row("Triggers", esc(s.triggers) || null)}
-      ${whenUse ? row("When to use", esc(whenUse)) : ""}
-      ${row("When not to use", s.whenNot ? esc(s.whenNot) : mutedSpan("not declared"))}
-      ${row("Tools it can call", toolChips || riskyOnly ? `<div class="${C.toolChips}">${toolChips}${riskyOnly}</div>` : mutedSpan("none mentioned"))}
-      ${row("Files referenced", s.files.length ? `<ul class="${C.valueList}">${s.files.map((f) => `<li class="mono ${C.mono} ${C.valueLi}">${esc(f)}</li>`).join("")}</ul>` : mutedSpan("none"))}
-      ${row(g.copies > 1 ? `Path (×${g.copies} identical installs)` : "Path", `<ul class="${C.valueList}">${paths}</ul><button class="mini-btn ${C.miniBtn}" data-action="editor" data-dir="${esc(s.dir)}">Open in Cursor</button>`)}
-      ${(overlapLinks || dupLine) ? row("Overlaps with", `<ul class="${C.valueList}">${dupLine}${overlapLinks}</ul>`) : ""}
-      ${row("Version / lock", lockHtml)}
-      ${row("Size", `~${s.tokens} tokens · ${s.sections.length} sections`)}
-    </div>
-    <article class="body-sections md-body ${MARKDOWN_ROOT}"></article>`;
+    ${section("Usage", usageRows(g, s), "usage")}
+    ${section("Details", details, "details")}
+    <section class="${C.section}"><h2 class="${C.sectionTitle}">SKILL.md</h2><article class="body-sections md-body ${MARKDOWN_ROOT}"></article></section>`;
   const article = body.querySelector(".md-body");
   withRaw(article, s, (raw) => { article.innerHTML = renderSkillMarkdown(raw); });
 }
@@ -559,45 +585,47 @@ function renderTabRendered(body, g, s) {
 const kTok = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-function usageHtml(g, s) {
+function section(title, rows, cls) {
+  const html = rows.filter(Boolean).join("");
+  return html
+    ? `<section class="${cls} ${C.section}"><h2 class="${C.sectionTitle}">${esc(title)}</h2><div class="rows ${C.rows}">${html}</div></section>`
+    : "";
+}
+
+const warn = (t) => ` <span class="${C.warn}">${t}</span>`;
+
+function usageRows(g, s) {
   const u = g.usage;
-  const muted = (t) => `<span class="${C.rowValueMuted}">${t}</span>`;
-  if (!u) return muted("Reading session logs…");
+  if (!u) return [row("Status", "Reading session logs…", true)];
   if (!u.tracked) {
-    return muted("Not tracked. Typecase reads Claude Code and Codex session logs; Cursor and Grok keep none it can read.");
+    return [row("Status", "Not tracked. Typecase reads Claude Code and Codex session logs; Cursor and Grok keep none it can read.", true)];
   }
-  const li = (html) => `<li class="${C.valueLi}">${html}</li>`;
-  const lines = [];
-  lines.push(li(
-    `<strong>${plural(u.recent, "use")}</strong> in ${u.windowDays} days · ${u.total} all time · ` +
-    (u.lastAt ? `last used ${agoText(u.lastAt)}` : "never used"),
-  ));
+  const rows = [
+    row(`Last ${u.windowDays} days`, `${plural(u.recent, "use")}${u.total !== u.recent ? ` · ${u.total} all time` : ""}` +
+      (u.unused ? warn("Unused, so a candidate to remove.") : "")),
+    row("Last used", u.lastAt ? agoText(u.lastAt) : "never"),
+  ];
   if (u.total) {
-    const parts = [];
-    if (u.how.agent) parts.push(`the agent ${u.how.agent}×`);
-    if (u.how.typed) parts.push(`you typed <code>/${esc(s.name)}</code> ${u.how.typed}×`);
-    if (u.how.read) parts.push(`read by Codex ${u.how.read}×`);
-    lines.push(li(`Started by ${parts.join(" · ")}`));
-    if (u.how.typed && !u.how.agent && !u.how.read) {
-      lines.push(li(muted("The agent never picks this on its own. Its description may not match how you ask for it.")));
-    }
+    const by = [];
+    if (u.how.agent + u.how.read) by.push(`the agent ${u.how.agent + u.how.read}×`);
+    if (u.how.typed) by.push(`you, typing <code>/${esc(s.name)}</code>, ${u.how.typed}×`);
+    const typedOnly = u.how.typed && !u.how.agent && !u.how.read;
+    rows.push(row("Started by", by.join(" · ") +
+      (typedOnly ? warn("The agent never picks it on its own; its description may not match how you ask for it.") : "")));
   }
   if (u.hit) {
-    lines.push(li(
-      `Used in ${u.hit.used} of ${plural(u.hit.offered, "session")} that offered it (${Math.round(u.hit.rate * 100)}%) · ` +
-      `~${u.hit.listingTokens} tokens of description in each ≈ ${kTok(u.hit.contextTokens)} so far`,
-    ));
+    rows.push(row("Hit rate", `${Math.round(u.hit.rate * 100)}% · used in ${u.hit.used} of ${plural(u.hit.offered, "session")} that offered it`));
+    rows.push(row("Context cost", `~${u.hit.listingTokens} tokens per session · ~${kTok(u.hit.contextTokens)} so far`));
   }
-  const byTool = Object.entries(u.byLog).map(([log, n]) => `${LOG_LABEL[log]} ${n}`);
-  for (const t of u.untracked) byTool.push(muted(`${esc(toolLabel(t))} not tracked`));
-  if (byTool.length > 1) lines.push(li(`By tool: ${byTool.join(" · ")}`));
   if (u.edit) {
-    lines.push(li(
-      `Edited ${esc(new Date(u.edit.editedAt).toLocaleDateString())}: ${plural(u.edit.before, "use")} in the ${u.edit.days} days before, ` +
-      `${u.edit.after} in the ${u.edit.days} days after`,
-    ));
+    const { before, after, days } = u.edit;
+    const trend = after > before ? `up from ${before}` : after < before ? `down from ${before}` : `same as the ${days} days before`;
+    rows.push(row("Since last edit", `${plural(after, "use")} in ${days} days, ${trend}` +
+      ` <span class="${C.rowValueMuted}">(edited ${esc(new Date(u.edit.editedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }))})</span>`));
   }
-  return `<ul class="${C.valueList}">${lines.join("")}</ul>`;
+  const tools = [...Object.entries(u.byLog).map(([log, n]) => `${LOG_LABEL[log]} ${n}×`), ...u.untracked.map((t) => `${esc(toolLabel(t))} not tracked`)];
+  if (tools.length > 1) rows.push(row("By tool", tools.join(" · ")));
+  return rows;
 }
 
 function openMarkdownLink(href) {
@@ -714,6 +742,7 @@ installShortcuts({
     nextRow: () => moveFocus(1),
     prevRow: () => moveFocus(-1),
     openRow: () => (focusedRow() ? openDetail(focusedRow().dataset.key) : false),
+    toggleSidebar: () => $("#toggle-sidebar").click(),
     closeSkill: closeDetail,
     tabRendered: () => setTab("rendered"),
     tabSource: () => setTab("source"),
@@ -810,6 +839,11 @@ function setTab(tab) {
   if (state.view === "detail") renderTab();
 }
 
+$("#toggle-sidebar").addEventListener("click", () => {
+  sidebarHidden = !sidebarHidden;
+  $("#sidebar").className = "sidebar " + cx(styles.sidebar, sidebarHidden && styles.sidebarHidden);
+  syncToolbar();
+});
 function setTheme(theme) {
   state.theme = theme;
   applyTheme();
@@ -824,7 +858,6 @@ function renderContent() {
   if (state.view === "detail") renderDetail();
   else renderRows();
   for (const el of document.querySelectorAll("[data-detail-only]")) el.hidden = state.view !== "detail";
-  for (const el of document.querySelectorAll("[data-list-only]")) el.hidden = state.view === "detail";
   const stats = (window.__renderStats ??= { count: 0, lastMs: 0 });
   stats.count++;
   stats.lastMs = performance.now() - t0;
@@ -842,7 +875,7 @@ async function load() {
   model = buildModel();
   rowsCache = null;
   rawCache.clear();
-  renderFilters();
+  renderSidebar();
   renderContent();
   const t2 = performance.now();
   window.__perf = { ipcMs: t1 - t0, firstRenderMs: t2 - t1 };
@@ -862,7 +895,7 @@ async function loadUsage() {
   }
   model = buildModel();
   const scrollTop = $("#content").scrollTop;
-  renderFilters();
+  renderSidebar();
   renderContent();
   $("#content").scrollTop = scrollTop;
 }
@@ -873,7 +906,7 @@ window.typecase.onSkillsChanged(async () => {
   model = buildModel();
   rowsCache = null;
   rawCache.clear();
-  renderFilters();
+  renderSidebar();
   renderContent();
   loadUsage();
 });

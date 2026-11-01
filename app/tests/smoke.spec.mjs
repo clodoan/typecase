@@ -92,7 +92,7 @@ test("search palette finds and opens a skill", async () => {
   await expect(page.locator(".palette-row.selected .name")).toHaveText("beta-notes");
   await page.keyboard.press("Enter");
   await expect(page.locator(".detail-hero")).toHaveText("beta-notes");
-  await expect(page.locator(".row", { hasText: "Path" })).toContainText("beta-notes/SKILL.md");
+  await expect(page.locator(".row", { hasText: "Installed at" })).toContainText("beta-notes/SKILL.md");
   await expect(page.locator(".body-sections")).toContainText("Write notes with owners and deadlines.");
 });
 
@@ -122,30 +122,28 @@ test("History tab shows the plain-language change paragraph", async () => {
   await expect(page.locator(".diff-list li.added")).toContainText("Escalation");
 });
 
-test("toolbar filter chips narrow the row list and clear with All", async () => {
+test("sidebar: short list, one selection, no empty items", async () => {
   // Filtering hides cached row nodes instead of rebuilding the list,
   // so count only visible rows.
   await page.keyboard.press("Escape");
-  // Tools with no skills get no chip; Overlaps has no matches here, so no chip either.
-  await expect(page.locator(".filter-chip", { hasText: "Cursor" })).toHaveCount(0);
-  await expect(page.locator(".filter-chip", { hasText: "Overlaps" })).toHaveCount(0);
+  await expect(page.locator(".nav-item")).toHaveText([/All Skills\s*2/, /Unused\s*1/, /Changed\s*1/, /Grok\s*1/, /Claude Code\s*1/]);
 
-  await page.locator(".filter-chip", { hasText: "Claude Code" }).click();
+  await page.locator(".nav-item", { hasText: "Claude Code" }).click();
   await expect(page.locator(".skill-row:visible")).toHaveCount(1);
   await expect(page.locator(".skill-row:visible .r-name")).toHaveText("beta-notes");
 
-  // A tool and a flag combine: Claude Code + Changed matches nothing.
-  await page.locator(".filter-chip", { hasText: "Changed" }).click();
-  await expect(page.locator(".skill-row:visible")).toHaveCount(0);
-  await expect(page.locator(".empty-hint")).toBeVisible();
+  // Picking a flag replaces the tool selection.
+  await page.locator(".nav-item", { hasText: "Changed" }).click();
+  await expect(page.locator(".nav-item[aria-current]")).toHaveCount(1);
+  await expect(page.locator(".skill-row:visible .r-name")).toHaveText("alpha-review");
 
-  await page.locator(".filter-chip", { hasText: "All" }).click();
+  await page.locator(".nav-item", { hasText: "All Skills" }).click();
   await expect(page.locator(".skill-row:visible")).toHaveCount(2);
 });
 
-test("usage from session logs: Unused chip, row cell and detail metrics", async () => {
+test("usage from session logs: Unused item, row cell and detail metrics", async () => {
   await page.keyboard.press("Escape");
-  const unused = page.locator(".filter-chip", { hasText: "Unused" });
+  const unused = page.locator(".nav-item", { hasText: "Unused" });
   await expect(unused).toContainText("1");
   await expect(page.locator(".skill-row", { hasText: "beta-notes" }).locator(".r-use")).toHaveText("0× · 1mo ago");
   // Grok keeps no readable log, so its skill is "not tracked", not unused.
@@ -154,9 +152,9 @@ test("usage from session logs: Unused chip, row cell and detail metrics", async 
   await unused.click();
   await expect(page.locator(".skill-row:visible")).toHaveCount(1);
   await page.locator(".skill-row:visible").click();
-  const row = page.locator(".row", { hasText: "Usage" });
-  await expect(row).toContainText("0 uses in 30 days · 1 all time · last used 1mo ago");
-  await expect(row).toContainText("you typed /beta-notes 1×");
-  await expect(row).toContainText("The agent never picks this on its own.");
-  await expect(row).toContainText("Used in 1 of 1 session that offered it (100%)");
+  const usage = page.locator("section.usage");
+  await expect(usage.locator(".row", { hasText: "Last 30 days" })).toContainText("0 uses · 1 all time Unused, so a candidate to remove.");
+  await expect(usage.locator(".row", { hasText: "Last used" })).toContainText("1mo ago");
+  await expect(usage.locator(".row", { hasText: "Started by" })).toContainText("you, typing /beta-notes, 1× The agent never picks it on its own");
+  await expect(usage.locator(".row", { hasText: "Hit rate" })).toContainText("100% · used in 1 of 1 session that offered it");
 });

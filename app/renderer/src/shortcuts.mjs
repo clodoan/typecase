@@ -1,5 +1,6 @@
 export const SHORTCUTS = [
   { id: "search", keys: ["mod+k"], label: "Search skills and commands", scope: "global" },
+  { id: "toggleSidebar", keys: ["mod+\\"], label: "Toggle sidebar" },
   { id: "back", keys: ["mod+["], label: "Back" },
   { id: "forward", keys: ["mod+]"], label: "Forward" },
   { id: "nextRow", keys: ["arrowdown", "arrowright"], label: "Next skill", scope: "list" },

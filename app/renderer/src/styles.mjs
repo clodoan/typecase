@@ -19,6 +19,22 @@ export const styles = stylex.create({
   // 4px window inset keeps the panels concentric with the 16pt window corner.
   app: { display: "flex", height: "100vh", padding: "4px", gap: "4px", backgroundColor: "transparent" },
 
+  sidebar: {
+    width: "216px",
+    flex: "none",
+    display: "flex",
+    flexDirection: "column",
+    borderRadius: vars.radiusPanel,
+    backgroundColor: vars.sidebarBg,
+    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
+    overflow: "hidden",
+  },
+  sidebarHidden: { width: 0, marginRight: "-4px", opacity: 0, pointerEvents: "none" },
+  sidebarDrag: { height: "52px", flex: "none" },
+
+  sidenav: { flex: 1, overflowY: "auto", padding: "0 3.5px 3.5px" },
+  // Space alone separates the "all / flags" group from the tools.
+  navSep: { height: "14px" },
   /* Active is a fill and color change only, so labels never change width. */
   item: {
     backgroundColor: { default: "transparent", ":hover": vars.hover },
@@ -28,6 +44,23 @@ export const styles = stylex.create({
     backgroundColor: { default: vars.activeRow, ":hover": vars.activeRow },
     color: { default: vars.ink, ":hover": vars.ink },
   },
+
+  navItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    width: "100%",
+    padding: "5px 14px",
+    borderStyle: "none", borderWidth: 0,
+    borderRadius: vars.radiusInset,
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    textAlign: "left",
+    cursor: "default",
+  },
+  navLabel: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 },
+  navCount: { marginLeft: "auto", color: vars.ink3, fontSize: "11px", fontVariantNumeric: "tabular-nums" },
+  navIcon: { display: "inline-flex", flex: "none" },
 
   main: {
     flex: 1,
@@ -64,7 +97,7 @@ export const styles = stylex.create({
     borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.pillBorder,
     boxShadow: vars.shadow,
   },
-  // macOS: clear the traffic lights (they end at x≈80).
+  // Sidebar hidden on macOS: clear the traffic lights (they end at x≈80).
   toolbarBesideLights: { paddingLeft: "84px" },
   control: {
     display: "inline-flex",
@@ -79,11 +112,7 @@ export const styles = stylex.create({
   },
   controlIcon: { width: "28px" },
   controlText: { padding: "0 10px" },
-  tbSep: { width: "1px", height: "16px", backgroundColor: vars.hairline, margin: "0 2px" },
-  tbFilters: { display: "flex", alignItems: "center", gap: "2px", minWidth: 0, overflowX: "auto", scrollbarWidth: "none" },
-  chip: { gap: "6px", flex: "none", whiteSpace: "nowrap" },
-  chipIcon: { display: "inline-flex", flex: "none", opacity: 0.8 },
-  chipCount: { color: vars.ink3, fontSize: "10.5px", fontVariantNumeric: "tabular-nums" },
+  backGroup: { display: "flex", alignItems: "center", gap: "6px" },
   tbTabs: { position: "absolute", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "2px" },
   tbSpacer: { flex: 1 },
 
@@ -176,27 +205,19 @@ export const styles = stylex.create({
     padding: "18px 0 10px",
     overflowWrap: "anywhere",
   },
-  detailSub: { color: vars.ink2, fontSize: "14px", lineHeight: 1.5, maxWidth: "60ch", paddingBottom: "10px" },
-  detailBadges: { display: "flex", gap: "6px", paddingBottom: "18px", flexWrap: "wrap" },
+  detailSub: { color: vars.ink2, fontSize: "14px", lineHeight: 1.5, maxWidth: "60ch", paddingBottom: "32px" },
 
-  rows: { borderTopWidth: "0.5px", borderTopStyle: "solid", borderTopColor: vars.hairline },
-  row: {
-    display: "grid",
-    gridTemplateColumns: "148px 1fr",
-    gap: "18px",
-    padding: "13px 0",
-    borderBottomWidth: "0.5px", borderBottomStyle: "solid", borderBottomColor: vars.hairline,
-  },
-  rowLabel: {
-    color: vars.ink3,
-    fontSize: "11px",
-    fontWeight: 600,
-    letterSpacing: "0.05em",
-    textTransform: "uppercase",
-    paddingTop: "2px",
-  },
-  rowValue: { fontSize: "12.5px", lineHeight: 1.55, color: vars.ink, minWidth: 0, overflowWrap: "anywhere" },
+  // The detail view is titled sections of label/value rows, spaced
+  // apart with no rules.
+  section: { marginBottom: "30px" },
+  sectionTitle: { fontSize: "13px", fontWeight: 650, color: vars.ink, margin: "0 0 12px" },
+  rows: { display: "flex", flexDirection: "column", gap: "9px" },
+  row: { display: "grid", gridTemplateColumns: "128px 1fr", gap: "20px" },
+  rowLabel: { color: vars.ink3, fontSize: "13px", lineHeight: 1.55 },
+  rowValue: { fontSize: "13px", lineHeight: 1.55, color: vars.ink, minWidth: 0, overflowWrap: "anywhere" },
   rowValueMuted: { color: vars.ink3 },
+  // A warning reads as its own line under the value it qualifies.
+  warn: { display: "block", color: vars.ink2 },
   valueList: { listStyle: "none", margin: 0, padding: 0 },
   valueLi: { padding: "1px 0" },
   mono: { fontFamily: vars.mono, fontSize: "11.5px" },
@@ -213,15 +234,14 @@ export const styles = stylex.create({
   },
 
   pathRow: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", padding: "1px 0" },
-  miniBtn: {
-    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
-    borderRadius: "999px",
-    padding: "3px 10px",
-    backgroundColor: { default: "transparent", ":hover": vars.hover },
-    color: { default: vars.ink2, ":hover": vars.ink },
+  linkBtn: {
+    borderStyle: "none", borderWidth: 0, padding: 0,
+    backgroundColor: "transparent",
+    color: vars.accent,
     fontFamily: "inherit",
-    fontSize: "11px",
+    fontSize: "12px",
     cursor: "default",
+    textDecoration: { default: "none", ":hover": "underline" },
   },
 
   linkSkill: { color: vars.accent, cursor: "default", textDecoration: { default: "none", ":hover": "underline" } },
@@ -312,7 +332,7 @@ export const styles = stylex.create({
 });
 
 export const md = stylex.create({
-  root: { fontSize: "13.5px", lineHeight: 1.65, color: vars.ink, overflowWrap: "break-word", padding: "24px 0 40px" },
+  root: { fontSize: "13.5px", lineHeight: 1.65, color: vars.ink, overflowWrap: "break-word", padding: "0 0 40px" },
   block: { marginTop: 0, marginBottom: "12px" },
   p: {},
   h: {

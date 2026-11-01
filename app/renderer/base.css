@@ -9,7 +9,7 @@ html, body { height: 100%; -webkit-font-smoothing: antialiased; }
 [hidden] { display: none !important; }
 
 /* The whole top band drags the window; only the controls inside it opt out. */
-.app-drag, .main-drag, .toolbar { -webkit-app-region: drag; }
+.app-drag, .sidebar-drag, .main-drag, .toolbar { -webkit-app-region: drag; }
 .toolbar button { -webkit-app-region: no-drag; }
 
 code {
