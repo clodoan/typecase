@@ -19,30 +19,19 @@
   </svg>
   <div class="app-drag"></div>
   <div id="app" class="app">
-    <aside id="sidebar" class="sidebar">
-      <div class="sidebar-drag"></div>
-      <nav id="sidenav" class="sidenav"></nav>
-    </aside>
-
     <main id="main" class="main">
       <div id="main-drag" class="main-drag"></div>
       <div class="toolbar" id="toolbar">
-        <button class="tb-btn" id="toggle-sidebar" title="Toggle sidebar" aria-label="Toggle sidebar">
-          <svg viewBox="0 0 16 16" width="14" height="14"><rect x="1.5" y="2.5" width="13" height="11" rx="2.5" fill="none" stroke="currentColor"/><line x1="6" y1="2.5" x2="6" y2="13.5" stroke="currentColor"/></svg>
+        <div class="tb-filters" id="filters" role="toolbar" aria-label="Filter skills" data-list-only></div>
+        <button class="tb-btn back-btn" id="back-btn" title="Back (⌘[)" aria-label="Back" data-detail-only hidden>
+          <svg viewBox="0 0 16 16" width="14" height="14"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <div class="tb-group back-group" id="back-group" data-detail-only hidden>
-          <div class="tb-sep"></div>
-          <button class="tb-btn back-btn" id="back-btn" title="Back (⌘[)" aria-label="Back">
-            <svg viewBox="0 0 16 16" width="14" height="14"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </div>
         <div class="tb-tabs" id="segmented" role="tablist" aria-label="View" data-detail-only hidden>
           <button data-tab="rendered" role="tab">Rendered</button>
           <button data-tab="source" role="tab">Source</button>
           <button data-tab="history" role="tab">History</button>
         </div>
         <div class="tb-spacer"></div>
-        <button class="tb-btn" id="theme-btn" title="Theme: system"></button>
         <button class="search-pill" id="search-pill">
           <svg viewBox="0 0 16 16" width="12" height="12"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span>Search</span><kbd>⌘K</kbd>
@@ -55,7 +44,7 @@
 
   <div class="palette-backdrop" id="palette-backdrop" hidden>
     <div class="palette" role="dialog" aria-label="Search skills">
-      <input id="palette-input" type="text" placeholder="Search skills, triggers, descriptions…" autocomplete="off" spellcheck="false" />
+      <input id="palette-input" type="text" placeholder="Search skills, or type “theme”…" autocomplete="off" spellcheck="false" />
       <div class="palette-results" id="palette-results"></div>
     </div>
   </div>

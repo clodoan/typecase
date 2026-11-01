@@ -12,6 +12,8 @@ const libURL = app.isPackaged
   : new URL("../scripts/lib/", import.meta.url);
 const { discover, displayGroups } = await import(new URL("discover.mjs", libURL).href);
 const { readLock, diffAgainstLock, LOCKFILE, CHANGELOG } = await import(new URL("lockfile.mjs", libURL).href);
+const { scanUsage } = await import(new URL("usage.mjs", libURL).href);
+const { indexUsage } = await import(new URL("usage-stats.mjs", libURL).href);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const workdir = process.env.TYPECASE_CWD ?? process.cwd();
@@ -87,6 +89,16 @@ const windowBackground = () => (nativeTheme.shouldUseDarkColors ? "#161618" : "#
 nativeTheme.on("updated", () => win?.setBackgroundColor(windowBackground()));
 ipcMain.on("typecase:set-theme", (_e, theme) => {
   if (["system", "light", "dark"].includes(theme)) nativeTheme.themeSource = theme;
+});
+
+// Usage comes over its own channel so the skill list paints before the
+// first (uncached) log scan finishes. Concurrent asks share one scan.
+let usageScan = null;
+ipcMain.handle("typecase:usage", () => {
+  usageScan ??= scanUsage()
+    .then(indexUsage)
+    .finally(() => { usageScan = null; });
+  return usageScan;
 });
 
 ipcMain.handle("typecase:raw", (_e, file) => {

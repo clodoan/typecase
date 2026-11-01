@@ -10,7 +10,6 @@ export const darkTheme = stylex.createTheme(vars, {
   ink2: "#98989d",
   ink3: "#68686d",
   hairline: "rgba(255, 255, 255, 0.09)",
-  sidebarBg: "rgba(22, 22, 24, 0.62)",
   hover: "rgba(255, 255, 255, 0.06)",
   activeRow: "rgba(255, 255, 255, 0.09)",
   pill: "rgba(40, 40, 42, 0.86)",

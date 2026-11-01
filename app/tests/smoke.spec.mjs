@@ -45,6 +45,15 @@ test.beforeAll(async () => {
   writeFileSync(path.join(home, ".claude/skills/beta-notes/SKILL.md"), BETA);
   writeFileSync(path.join(home, ".claude/skills/beta-notes/run.command"), "#!/bin/sh\ntouch pwned\n", { mode: 0o755 });
 
+  // One Claude Code session, 40 days ago, that offered beta-notes and in
+  // which the user typed /beta-notes: used once, but not in the last 30 days.
+  const at = new Date(Date.now() - 40 * 86_400_000).toISOString();
+  mkdirSync(path.join(home, ".claude/projects/-work"), { recursive: true });
+  writeFileSync(path.join(home, ".claude/projects/-work/s1.jsonl"), [
+    { type: "attachment", timestamp: at, attachment: { type: "skill_listing", content: "- beta-notes: Take structured meeting notes." } },
+    { type: "user", timestamp: at, cwd: "/work", message: { content: "<command-name>/beta-notes</command-name>" } },
+  ].map((r) => JSON.stringify(r)).join("\n"));
+
   process.env.TYPECASE_HOME = home;
   process.env.TYPECASE_SNAPSHOTS = path.join(home, ".cache/typecase/snapshots");
   const { discover } = await import("../../scripts/lib/discover.mjs");
@@ -59,7 +68,7 @@ test.beforeAll(async () => {
     cwd: appDir,
     args: [appDir, "--no-sandbox"],
     // No `cursor` or `code` on PATH, as for an app launched from Finder.
-    env: { ...process.env, PATH: "/usr/bin:/bin", TYPECASE_HOME: home, TYPECASE_CWD: home },
+    env: { ...process.env, PATH: "/usr/bin:/bin", TYPECASE_HOME: home, TYPECASE_CWD: home, CLAUDE_CONFIG_DIR: path.join(home, ".claude") },
   });
   page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
@@ -113,11 +122,41 @@ test("History tab shows the plain-language change paragraph", async () => {
   await expect(page.locator(".diff-list li.added")).toContainText("Escalation");
 });
 
-test("sidebar tool filter narrows the row list", async () => {
+test("toolbar filter chips narrow the row list and clear with All", async () => {
   // Filtering hides cached row nodes instead of rebuilding the list,
   // so count only visible rows.
   await page.keyboard.press("Escape");
-  await page.locator(".nav-item", { hasText: "Claude Code" }).click();
+  // Tools with no skills get no chip; Overlaps has no matches here, so no chip either.
+  await expect(page.locator(".filter-chip", { hasText: "Cursor" })).toHaveCount(0);
+  await expect(page.locator(".filter-chip", { hasText: "Overlaps" })).toHaveCount(0);
+
+  await page.locator(".filter-chip", { hasText: "Claude Code" }).click();
   await expect(page.locator(".skill-row:visible")).toHaveCount(1);
   await expect(page.locator(".skill-row:visible .r-name")).toHaveText("beta-notes");
+
+  // A tool and a flag combine: Claude Code + Changed matches nothing.
+  await page.locator(".filter-chip", { hasText: "Changed" }).click();
+  await expect(page.locator(".skill-row:visible")).toHaveCount(0);
+  await expect(page.locator(".empty-hint")).toBeVisible();
+
+  await page.locator(".filter-chip", { hasText: "All" }).click();
+  await expect(page.locator(".skill-row:visible")).toHaveCount(2);
+});
+
+test("usage from session logs: Unused chip, row cell and detail metrics", async () => {
+  await page.keyboard.press("Escape");
+  const unused = page.locator(".filter-chip", { hasText: "Unused" });
+  await expect(unused).toContainText("1");
+  await expect(page.locator(".skill-row", { hasText: "beta-notes" }).locator(".r-use")).toHaveText("0× · 1mo ago");
+  // Grok keeps no readable log, so its skill is "not tracked", not unused.
+  await expect(page.locator(".skill-row", { hasText: "alpha-review" }).locator(".r-use")).toHaveText("—");
+
+  await unused.click();
+  await expect(page.locator(".skill-row:visible")).toHaveCount(1);
+  await page.locator(".skill-row:visible").click();
+  const row = page.locator(".row", { hasText: "Usage" });
+  await expect(row).toContainText("0 uses in 30 days · 1 all time · last used 1mo ago");
+  await expect(row).toContainText("you typed /beta-notes 1×");
+  await expect(row).toContainText("The agent never picks this on its own.");
+  await expect(row).toContainText("Used in 1 of 1 session that offered it (100%)");
 });

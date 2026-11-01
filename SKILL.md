@@ -4,7 +4,7 @@ description: >-
   Read, audit, and track the agent skills installed on this machine. Use
   for "what skills are installed", "which skill handles X", "do any
   skills overlap or duplicate", "what changed in my skills since last
-  week", or before adding a new skill (to check the name and triggers
+  week", "which skills do I never use", or before adding a new skill (to check the name and triggers
   are free). Discovers Grok, Cursor, Claude Code, and Codex install
   locations, parses every SKILL.md, and keeps a lockfile + changelog.
 ---
@@ -49,7 +49,19 @@ repo root or `$HOME`).
    node <path-to-skill>/scripts/typecase.mjs pin <skill-name>        # restore locked version
    ```
 
-5. **Desktop reader.** `open` launches the Typecase app (if its
+5. **See which skills get used.** `usage` reads the local Claude Code
+   and Codex session logs: uses in 30 days and all time, hit rate (used ÷
+   sessions that offered it), agent-picked vs typed `/name`, and which
+   skill wins each overlap. Skills unused for 30 days are removal
+   candidates; Cursor/Grok-only skills show as "not tracked":
+
+   ```bash
+   node <path-to-skill>/scripts/typecase.mjs usage
+   node <path-to-skill>/scripts/typecase.mjs usage <skill-name>
+   node <path-to-skill>/scripts/typecase.mjs usage --unused --days 60
+   ```
+
+6. **Desktop reader.** `open` launches the Typecase app (if its
    dependencies are installed under `<path-to-skill>/app`) or falls back
    to a static HTML reader in the browser:
 

@@ -12,6 +12,8 @@ import {
   LOCKFILE, CHANGELOG, writeLock, readLock, diffAgainstLock, appendChangelog, pin,
 } from "./lib/lockfile.mjs";
 import { htmlReader } from "./lib/html-reader.mjs";
+import { scanUsage } from "./lib/usage.mjs";
+import { indexUsage, skillUsage, agoText, LOG_LABEL, WINDOW_DAYS } from "./lib/usage-stats.mjs";
 
 const EXIT_OK = 0;
 const EXIT_DIFFS = 1;
@@ -38,6 +40,8 @@ Commands:
   lock [--no-snapshot]                 write ${LOCKFILE} (+ folder snapshots for pin)
   diff [--write-changelog]             what changed since ${LOCKFILE}, one paragraph per skill
   pin <skill>                          restore the locked version of a skill
+  usage [skill] [--unused] [--days n]  how often each skill is used, from local
+                                       Claude Code and Codex session logs
   -h, --help
 
 Set TYPECASE_LLM_CMD to generate diff paragraphs with an LLM (stdin: change
@@ -246,6 +250,125 @@ function cmdOpen() {
   spawn(opener, [file], { detached: true, stdio: "ignore" }).on("error", () => {});
 }
 
+const pct = (x) => `${Math.round(x * 100)}%`;
+const kTok = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+
+function howText(u) {
+  return [
+    u.how.agent ? `agent ${u.how.agent}` : "",
+    u.how.typed ? `you ${u.how.typed}` : "",
+    u.how.read ? `read ${u.how.read}` : "",
+  ].filter(Boolean).join(" · ") || "—";
+}
+
+async function cmdUsage(args) {
+  const json = flag(args, "--json");
+  const unusedOnly = flag(json.args, "--unused");
+  const days = opt(unusedOnly.args, "--days");
+  const windowDays = days.value ? Number(days.value) : WINDOW_DAYS;
+  if (!(windowDays > 0)) throw new UsageError("--days needs a positive number");
+  const nameArg = days.args[0];
+  if (nameArg?.startsWith("-")) throw new UsageError(`unknown option for usage: ${nameArg}`);
+
+  const data = discover();
+  const index = indexUsage(await scanUsage());
+  const byName = new Map();
+  for (const s of data.skills.filter((x) => !x.error)) {
+    if (!byName.has(s.name)) byName.set(s.name, []);
+    byName.get(s.name).push(s);
+  }
+  const rows = [...byName.entries()]
+    .map(([name, installs]) => ({ name, installs, u: skillUsage(index, installs, { windowDays }) }))
+    .sort((a, b) => (b.u.recent ?? -1) - (a.u.recent ?? -1) || (b.u.total ?? -1) - (a.u.total ?? -1) || a.name.localeCompare(b.name));
+
+  if (json.present) {
+    console.log(JSON.stringify({ sources: index.sources, skills: rows.map(({ name, u }) => ({ name, ...u })) }, null, 2));
+    return;
+  }
+
+  const live = index.sources.filter((s) => s.sessions > 0);
+  console.log(
+    c.bold("Usage") + c.dim(" · ") +
+    (live.length
+      ? live.map((s) => `${s.sessions} ${LOG_LABEL[s.tool]} session${s.sessions === 1 ? "" : "s"} since ${s.since.slice(0, 10)}`).join(c.dim(" · "))
+      : c.yellow("no Claude Code or Codex session logs found")),
+  );
+
+  if (nameArg) {
+    const row = rows.find((r) => r.name === nameArg) ?? rows.find((r) => r.name.includes(nameArg));
+    if (!row) throw new UsageError(`no skill named "${nameArg}"`);
+    const { u } = row;
+    console.log("\n" + c.bold(row.name) + c.dim(`  installed for ${[...new Set(row.installs.map((i) => i.tool))].join(", ")}`));
+    if (!u.tracked) {
+      console.log(c.dim("  not tracked: no readable session log covers the tools it is installed for"));
+      return;
+    }
+    console.log(`  uses        ${u.recent} in ${windowDays}d · ${u.total} all time · ${u.lastAt ? `last used ${agoText(u.lastAt)}` : "never used"}`);
+    console.log(`  started by  ${howText(u)}`);
+    console.log(`  by tool     ${Object.entries(u.byLog).map(([l, n]) => `${LOG_LABEL[l]} ${n}`).join(" · ")}${u.untracked.length ? c.dim(` · ${u.untracked.join(", ")} not tracked`) : ""}`);
+    if (u.hit) {
+      console.log(`  hit rate    used in ${u.hit.used} of ${u.hit.offered} sessions that offered it (${pct(u.hit.rate)})`);
+      console.log(`  context     ~${u.hit.listingTokens} tokens of description per session ≈ ${kTok(u.hit.contextTokens)} tokens so far`);
+    }
+    if (u.edit) {
+      console.log(`  last edit   ${new Date(u.edit.editedAt).toISOString().slice(0, 10)}: ${u.edit.before} uses in the ${u.edit.days}d before, ${u.edit.after} in the ${u.edit.days}d after`);
+    }
+    const overlaps = data.overlaps.filter((o) => o.a.name === row.name || o.b.name === row.name);
+    for (const o of overlaps) {
+      const other = rows.find((r) => r.name === (o.a.name === row.name ? o.b.name : o.a.name));
+      if (other) console.log(`  overlaps    ${other.name}: ${other.u.tracked ? `${other.u.recent} uses in ${windowDays}d` : "not tracked"}`);
+    }
+    return;
+  }
+
+  const tracked = rows.filter((r) => r.u.tracked);
+  const unused = tracked.filter((r) => r.u.unused);
+  const untracked = rows.filter((r) => !r.u.tracked);
+
+  const used = tracked.filter((r) => r.u.total > 0);
+  if (!unusedOnly.present && !used.length) console.log(c.dim("\n  no skill uses recorded yet"));
+  if (!unusedOnly.present && used.length) {
+    console.log("\n" + c.dim(`  ${"skill".padEnd(28)} ${`${windowDays}d`.padStart(4)} ${"all".padStart(5)}  ${"last".padEnd(9)} ${"hit rate".padEnd(14)} started by`));
+    for (const { name, u } of used) {
+      const hit = u.hit ? `${pct(u.hit.rate)} of ${u.hit.offered}` : "—";
+      console.log(`  ${c.bold(name.padEnd(28).slice(0, 28))} ${String(u.recent).padStart(4)} ${String(u.total).padStart(5)}  ${agoText(u.lastAt).padEnd(9)} ${hit.padEnd(14)} ${howText(u)}`);
+    }
+    const typedOnly = tracked.filter((r) => r.u.how.typed > 0 && r.u.how.agent === 0 && r.u.how.read === 0);
+    if (typedOnly.length) {
+      console.log("\n" + c.yellow(`only ever started by you (${typedOnly.length}) — the agent never picks these; their descriptions may not match how you ask:`));
+      console.log("  " + typedOnly.map((r) => r.name).join(", "));
+    }
+  }
+  if (!unusedOnly.present) {
+    const pairs = data.overlaps
+      .map((o) => [rows.find((r) => r.name === o.a.name), rows.find((r) => r.name === o.b.name)])
+      .filter(([a, b]) => a?.u.tracked && b?.u.tracked && a.name !== b.name);
+    const seen = new Set();
+    const uniq = pairs.filter(([a, b]) => {
+      const key = [a.name, b.name].sort().join("\0");
+      return !seen.has(key) && seen.add(key);
+    });
+    if (uniq.length) {
+      console.log("\n" + c.yellow(`overlaps — which one gets used (${windowDays}d):`));
+      for (const [a, b] of uniq.slice(0, 12)) {
+        const [w, l] = a.u.recent >= b.u.recent ? [a, b] : [b, a];
+        console.log(`  ${c.bold(w.name)} ${w.u.recent}× ↔ ${l.name} ${l.u.recent}×`);
+      }
+    }
+  }
+
+  console.log("\n" + c.yellow(`unused in ${windowDays} days (${unused.length})`) + c.dim(" — candidates to remove:"));
+  if (unused.length) {
+    for (const { name, u, installs } of unused) {
+      const cost = u.hit ? c.dim(`  ~${kTok(u.hit.contextTokens)} tokens of context spent`) : "";
+      console.log(`  ${name.padEnd(28)} ${c.dim(`${u.lastAt ? `last used ${agoText(u.lastAt)}` : "never used"} · ${[...new Set(installs.map((i) => i.tool))].join(", ")}`)}${cost}`);
+    }
+  } else console.log(c.dim("  none"));
+  if (untracked.length) {
+    console.log(c.dim(`\nnot tracked (${untracked.length}): installed only for tools without readable logs (Cursor, Grok)`));
+  }
+}
+
 class UsageError extends Error {}
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -258,6 +381,7 @@ try {
     case "diff": cmdDiff(rest); break;
     case "pin": cmdPin(rest); break;
     case "open": cmdOpen(rest); break;
+    case "usage": await cmdUsage(rest); break;
     case "-h":
     case "--help":
     case undefined:

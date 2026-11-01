@@ -19,28 +19,6 @@ export const styles = stylex.create({
   // 4px window inset keeps the panels concentric with the 16pt window corner.
   app: { display: "flex", height: "100vh", padding: "4px", gap: "4px", backgroundColor: "transparent" },
 
-  sidebar: {
-    width: "216px",
-    flex: "none",
-    display: "flex",
-    flexDirection: "column",
-    borderRadius: vars.radiusPanel,
-    backgroundColor: vars.sidebarBg,
-    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
-    overflow: "hidden",
-  },
-  sidebarHidden: { width: 0, marginRight: "-4px", opacity: 0, pointerEvents: "none" },
-  sidebarDrag: { height: "52px", flex: "none" },
-
-  sidenav: { flex: 1, overflowY: "auto", padding: "0 3.5px 3.5px" },
-  navHeading: {
-    fontSize: "10.5px",
-    fontWeight: 600,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
-    color: vars.ink3,
-    padding: "14px 14px 5px",
-  },
   /* Active is a fill and color change only, so labels never change width. */
   item: {
     backgroundColor: { default: "transparent", ":hover": vars.hover },
@@ -50,23 +28,6 @@ export const styles = stylex.create({
     backgroundColor: { default: vars.activeRow, ":hover": vars.activeRow },
     color: { default: vars.ink, ":hover": vars.ink },
   },
-
-  navItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    width: "100%",
-    padding: "5px 14px",
-    borderStyle: "none", borderWidth: 0,
-    borderRadius: vars.radiusInset,
-    fontFamily: "inherit",
-    fontSize: "inherit",
-    textAlign: "left",
-    cursor: "default",
-  },
-  navLabel: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 },
-  navCount: { marginLeft: "auto", color: vars.ink3, fontSize: "11px", fontVariantNumeric: "tabular-nums" },
-  navIcon: { display: "inline-flex", flex: "none" },
 
   main: {
     flex: 1,
@@ -103,7 +64,7 @@ export const styles = stylex.create({
     borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.pillBorder,
     boxShadow: vars.shadow,
   },
-  // Sidebar hidden on macOS: clear the traffic lights (they end at x≈80).
+  // macOS: clear the traffic lights (they end at x≈80).
   toolbarBesideLights: { paddingLeft: "84px" },
   control: {
     display: "inline-flex",
@@ -119,7 +80,10 @@ export const styles = stylex.create({
   controlIcon: { width: "28px" },
   controlText: { padding: "0 10px" },
   tbSep: { width: "1px", height: "16px", backgroundColor: vars.hairline, margin: "0 2px" },
-  backGroup: { display: "flex", alignItems: "center", gap: "6px" },
+  tbFilters: { display: "flex", alignItems: "center", gap: "2px", minWidth: 0, overflowX: "auto", scrollbarWidth: "none" },
+  chip: { gap: "6px", flex: "none", whiteSpace: "nowrap" },
+  chipIcon: { display: "inline-flex", flex: "none", opacity: 0.8 },
+  chipCount: { color: vars.ink3, fontSize: "10.5px", fontVariantNumeric: "tabular-nums" },
   tbTabs: { position: "absolute", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "2px" },
   tbSpacer: { flex: 1 },
 
@@ -181,14 +145,16 @@ export const styles = stylex.create({
     overflow: "hidden",
   },
   rToolIcon: { flex: "none", opacity: 0.8 },
-  rTok: {
+  rUse: {
     flex: "none",
-    width: "52px",
+    width: "84px",
     textAlign: "right",
     fontSize: "10.5px",
-    color: vars.ink3,
+    color: vars.ink2,
     fontVariantNumeric: "tabular-nums",
   },
+
+  rUseDim: { color: vars.ink3, opacity: 0.7 },
 
   badge: {
     fontSize: "9.5px",
@@ -201,26 +167,6 @@ export const styles = stylex.create({
   },
 
   detail: { maxWidth: "760px", margin: "0 auto" },
-  detailTop: { display: "flex", alignItems: "center", gap: "8px", paddingBottom: "6px" },
-  spacer: { flex: 1 },
-  iconBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "26px",
-    height: "26px",
-    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
-    borderRadius: "999px",
-    backgroundColor: { default: "transparent", ":hover": vars.hover },
-    color: { default: vars.ink2, ":hover": vars.ink },
-    cursor: "default",
-    fontSize: "12px",
-  },
-  iconBtnActive: {
-    backgroundColor: { default: vars.accent, ":hover": vars.accent },
-    color: { default: vars.accentInk, ":hover": vars.accentInk },
-    borderColor: "transparent",
-  },
 
   detailHero: {
     fontSize: "42px",
@@ -279,20 +225,6 @@ export const styles = stylex.create({
   },
 
   linkSkill: { color: vars.accent, cursor: "default", textDecoration: { default: "none", ":hover": "underline" } },
-
-  frontmatterPop: {
-    margin: "10px 0 2px",
-    padding: "12px 14px",
-    borderRadius: "10px",
-    backgroundColor: vars.card,
-    borderWidth: "0.5px", borderStyle: "solid", borderColor: vars.hairline,
-    fontFamily: vars.mono,
-    fontSize: "11px",
-    lineHeight: 1.6,
-    whiteSpace: "pre-wrap",
-    color: vars.ink2,
-    boxShadow: vars.shadow,
-  },
 
   sourceBlock: {
     fontFamily: vars.mono,

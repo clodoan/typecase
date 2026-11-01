@@ -143,8 +143,9 @@ export function parseSkill(skillFile, { tool, scope, root }) {
   const riskyTools = RISKY.filter(({ re }) => re.test(raw)).map(({ kind }) => kind);
 
   let bytes = 0;
+  let mtimeMs = 0;
   try {
-    bytes = statSync(skillFile).size;
+    ({ size: bytes, mtimeMs } = statSync(skillFile));
   } catch {}
 
   return {
@@ -164,6 +165,7 @@ export function parseSkill(skillFile, { tool, scope, root }) {
     riskyTools,
     tokens: Math.ceil(raw.length / 4),
     bytes,
+    mtimeMs,
     hash: hashSkillDir(dir),
   };
 }

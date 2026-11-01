@@ -17,7 +17,6 @@ export const vars = stylex.defineVars({
   ink2: "#6e6e73",
   ink3: "#a1a1a6",
   hairline: "rgba(0, 0, 0, 0.08)",
-  sidebarBg: "rgba(245, 245, 247, 0.72)",
   hover: "rgba(0, 0, 0, 0.04)",
   activeRow: "rgba(0, 0, 0, 0.07)",
   pill: "rgba(255, 255, 255, 0.85)",

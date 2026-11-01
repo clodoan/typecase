@@ -1,5 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 
+import { agoText, LOG_LABEL, skillUsage, WINDOW_DAYS } from "../../../scripts/lib/usage-stats.mjs";
 import { HEADING_ID_PREFIX, MARKDOWN_ROOT, renderSkillMarkdown } from "./markdown.mjs";
 import { installShortcuts, shortcutText } from "./shortcuts.mjs";
 import { styles } from "./styles.mjs";
@@ -8,12 +9,10 @@ import { darkTheme } from "./themes.mjs";
 const cx = (...xs) => stylex.attrs(...xs).class ?? "";
 
 const C = {
-  navHeading: cx(styles.navHeading),
-  navItem: cx(styles.navItem, styles.item),
-  navItemActive: cx(styles.navItem, styles.item, styles.itemActive),
-  navLabel: cx(styles.navLabel),
-  navCount: cx(styles.navCount),
-  navIcon: cx(styles.navIcon),
+  chip: cx(styles.control, styles.controlText, styles.item, styles.chip),
+  chipActive: cx(styles.control, styles.controlText, styles.item, styles.itemActive, styles.chip),
+  chipCount: cx(styles.chipCount),
+  chipIcon: cx(styles.chipIcon),
 
   countHead: cx(styles.countHead),
   countH1: cx(styles.countHeadH1),
@@ -26,19 +25,15 @@ const C = {
   rBadges: cx(styles.rBadges),
   rTool: cx(styles.rTool),
   rToolIcon: cx(styles.rToolIcon),
-  rTok: cx(styles.rTok),
+  rUse: cx(styles.rUse),
+  rUseDim: cx(styles.rUse, styles.rUseDim),
 
   badge: cx(styles.badge),
 
   detail: cx(styles.detail),
-  detailTop: cx(styles.detailTop),
-  spacer: cx(styles.spacer),
-  iconBtn: cx(styles.iconBtn),
-  iconBtnActive: cx(styles.iconBtn, styles.iconBtnActive),
   detailHero: cx(styles.detailHero),
   detailSub: cx(styles.detailSub),
   detailBadges: cx(styles.detailBadges),
-  frontmatterPop: cx(styles.frontmatterPop),
 
   rows: cx(styles.rows),
   row: cx(styles.row),
@@ -67,8 +62,6 @@ const C = {
   diffLiChanged: cx(styles.diffLi, styles.diffLiChanged),
   emptyHint: cx(styles.emptyHint),
 
-
-
   paletteRow: cx(styles.paletteRow),
   paletteRowSelected: cx(styles.paletteRow, styles.paletteRowSelected),
   paletteName: cx(styles.paletteName),
@@ -89,11 +82,6 @@ const TOOLS = [
   { id: "codex", label: "Codex" },
   { id: "shared", label: "Shared" },
 ];
-const SCOPES = [
-  { id: "user", label: "User" },
-  { id: "project", label: "Project" },
-  { id: "plugin", label: "Plugin" },
-];
 
 const TOOL_ICONS = {
   grok: '<svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-grok"/></svg>',
@@ -102,25 +90,32 @@ const TOOL_ICONS = {
   codex: '<svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-codex"/></svg>',
   shared: '<svg viewBox="0 0 16 16" width="13" height="13"><use href="#ti-shared"/></svg>',
 };
-const LIB_ICONS = {
-  all: '<svg viewBox="0 0 16 16" width="13" height="13"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
-  active: '<svg viewBox="0 0 16 16" width="13" height="13"><circle cx="8" cy="8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>',
+const FLAG_ICONS = {
   changed: '<svg viewBox="0 0 16 16" width="13" height="13"><path d="M13 8A5 5 0 1 1 8 3h3M9 1l2.2 2L9 5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  unused: '<svg viewBox="0 0 16 16" width="13" height="13"><circle cx="8" cy="8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.2 2"/></svg>',
   overlaps: '<svg viewBox="0 0 16 16" width="13" height="13"><circle cx="6" cy="8" r="3.8" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="8" r="3.8" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
 };
 
+// Two filters only: one tool (or all), plus at most one flag that narrows
+// it further.
+const FLAGS = [
+  { id: "unused", label: "Unused", title: `No uses in the last ${WINDOW_DAYS} days (Claude Code and Codex logs)` },
+  { id: "changed", label: "Changed", title: "Changed since skills.lock" },
+  { id: "overlaps", label: "Overlaps", title: "Triggers overlap another skill" },
+];
+
 let data = null;
 let model = null;
+// Usage index from the main process (scripts/lib/usage-stats.mjs
+// indexUsage); null until the first log scan answers.
+let usage = null;
 const state = {
-  library: "all",
   tool: null,
-  scope: null,
-  collection: null,
+  flag: null,
   theme: localStorage.getItem("typecase-theme") || "system",
   view: "grid",
   groupKey: null,
   tab: "rendered",
-  showFrontmatter: false,
   focusIndex: -1,
 };
 
@@ -131,26 +126,18 @@ const keyOf = (s) => `${s.tool}:${s.scope}:${s.name}:${s.path}`;
 const lockKeyOf = (s) => `${s.tool}:${s.scope}:${s.name}`; // matches lockfile.mjs keyOf
 
 let isMac = false;
-let sidebarHidden = false;
 
 function applyShellStyles() {
   document.body.className = cx(styles.body);
   $("#app").className = "app " + cx(styles.app);
-  $("#sidebar").className = "sidebar " + cx(styles.sidebar, sidebarHidden && styles.sidebarHidden);
   document.querySelector(".app-drag").className = "app-drag " + cx(styles.appDrag);
-  document.querySelector(".sidebar-drag").className = "sidebar-drag " + cx(styles.sidebarDrag);
-  $("#sidenav").className = "sidenav " + cx(styles.sidenav);
   $("#main").className = "main " + cx(styles.main);
   $("#main-drag").className = "main-drag " + cx(styles.mainDrag);
   syncToolbar();
-  $("#toggle-sidebar").className = "tb-btn " + C.tbBtn;
-  $("#toggle-sidebar").title = `Toggle sidebar (${shortcutText("toggleSidebar")})`;
+  $("#filters").className = "tb-filters " + cx(styles.tbFilters);
   $("#back-btn").title = `Back (${shortcutText("back")})`;
   $("#search-pill kbd").textContent = shortcutText("search");
-  $("#back-group").className = "tb-group back-group " + cx(styles.backGroup);
   $("#back-btn").className = "tb-btn back-btn " + C.tbBtn;
-  $("#theme-btn").className = "tb-btn " + C.tbBtn;
-  for (const el of document.querySelectorAll(".tb-sep")) el.className = "tb-sep " + cx(styles.tbSep);
   document.querySelector(".tb-spacer").className = "tb-spacer " + cx(styles.tbSpacer);
   $("#search-pill").className = "search-pill " + cx(styles.control, styles.controlText, styles.item, styles.searchPill);
   $("#search-pill kbd").className = cx(styles.searchKbd);
@@ -164,10 +151,12 @@ function applyShellStyles() {
 }
 
 function syncToolbar() {
-  $("#toolbar").className = "toolbar " + cx(styles.toolbar, isMac && sidebarHidden && styles.toolbarBesideLights);
+  $("#toolbar").className = "toolbar " + cx(styles.toolbar, isMac && styles.toolbarBesideLights);
 }
 
 function syncSegmented() {
+  // History only has something to say once a skills.lock exists.
+  $('#segmented [data-tab="history"]').hidden = !data?.lock;
   for (const b of document.querySelectorAll("#segmented button")) {
     const active = b.dataset.tab === state.tab;
     b.className = active ? C.tabActive : C.tab;
@@ -176,11 +165,6 @@ function syncSegmented() {
 }
 
 const darkMQ = matchMedia("(prefers-color-scheme: dark)");
-const THEME_ICONS = {
-  system: '<svg viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 2.8v10.4A5.2 5.2 0 0 0 8 2.8Z" fill="currentColor"/></svg>',
-  light: '<svg viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.2v2M8 12.8v2M1.2 8h2M12.8 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M12.8 3.2l-1.4 1.4M4.6 11.4l-1.4 1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
-  dark: '<svg viewBox="0 0 16 16" width="14" height="14"><path d="M13 9.6A5.6 5.6 0 0 1 6.4 3a5.6 5.6 0 1 0 6.6 6.6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-};
 
 function applyTheme() {
   const resolved = state.theme === "system" ? (darkMQ.matches ? "dark" : "light") : state.theme;
@@ -191,9 +175,6 @@ function applyTheme() {
   document.documentElement.style.colorScheme = resolved;
   localStorage.setItem("typecase-theme", state.theme);
   window.typecase.setTheme(state.theme);
-  const btn = $("#theme-btn");
-  btn.innerHTML = THEME_ICONS[state.theme];
-  btn.title = `Theme: ${state.theme}`;
 }
 darkMQ.addEventListener("change", () => { if (state.theme === "system") applyTheme(); });
 
@@ -226,8 +207,7 @@ function buildModel() {
       overlap: installs.some((s) => overlapPaths.has(s.path)) || collisionNames.has(rep.name),
       risky: rep.riskyTools.length > 0,
       tools: [...new Set(installs.map((s) => s.tool))],
-      scopes: [...new Set(installs.map((s) => s.scope))],
-      roots: [...new Set(installs.map((s) => s.root))],
+      usage: usage ? skillUsage(usage, installs) : null,
     });
   }
   groups.sort((a, b) => a.rep.name.localeCompare(b.rep.name));
@@ -242,27 +222,27 @@ function buildModel() {
       all: groups.length,
       changed: count((g) => g.changed),
       overlaps: count((g) => g.overlap),
+      unused: count((g) => g.usage?.tracked && g.usage.unused),
       tools: new Map(TOOLS.map((t) => [t.id, count((g) => g.tools.includes(t.id))])),
-      scopes: new Map(SCOPES.map((sc) => [sc.id, count((g) => g.scopes.includes(sc.id))])),
-      roots: new Map(data.roots.filter((r) => r.exists).map((r) => [r.dir, count((g) => g.roots.includes(r.dir))])),
     },
   };
 }
 
+const FLAG_TEST = {
+  unused: (g) => g.usage?.tracked && g.usage.unused,
+  changed: (g) => g.changed,
+  overlaps: (g) => g.overlap,
+};
+
 function visibleGroups() {
   let out = model.groups;
-  if (state.library === "changed") out = out.filter((g) => g.changed);
-  if (state.library === "overlaps") out = out.filter((g) => g.overlap);
   if (state.tool) out = out.filter((g) => g.tools.includes(state.tool));
-  if (state.scope) out = out.filter((g) => g.scopes.includes(state.scope));
-  if (state.collection) out = out.filter((g) => g.roots.includes(state.collection));
+  if (state.flag) out = out.filter(FLAG_TEST[state.flag]);
   return out;
 }
 
 function repFor(g) {
   if (state.tool) return g.installs.find((s) => s.tool === state.tool) ?? g.rep;
-  if (state.scope) return g.installs.find((s) => s.scope === state.scope) ?? g.rep;
-  if (state.collection) return g.installs.find((s) => s.root === state.collection) ?? g.rep;
   return g.rep;
 }
 
@@ -282,70 +262,59 @@ function fuzzyScore(query, s) {
   return hits === words.length ? 8 : hits > 0 ? 2 : -1;
 }
 
-function navButton({ nav, icon, label, count }) {
-  return `<button class="nav-item ${C.navItem}" data-nav="${esc(nav)}">
-    <span class="${C.navIcon}">${icon ?? ""}</span><span class="${C.navLabel}">${esc(label)}</span>${count != null ? `<span class="count ${C.navCount}">${count}</span>` : ""}
-  </button>`;
+function chipButton({ filter, icon, label, count, title }) {
+  return `<button class="filter-chip" data-filter="${esc(filter)}"${title ? ` title="${esc(title)}"` : ""}>` +
+    (icon ? `<span class="${C.chipIcon}">${icon}</span>` : "") +
+    `<span>${esc(label)}</span><span class="count ${C.chipCount}">${count}</span></button>`;
 }
 
-function renderSidebar() {
-  const { counts } = model;
-  let html = `<div class="nav-heading ${C.navHeading}">Library</div>`;
-  const lib = [
-    { id: "all", label: "All Skills", count: counts.all },
-    { id: "active", label: "Active", count: counts.all },
-    { id: "changed", label: "Changed since lock", count: counts.changed },
-    { id: "overlaps", label: "Overlaps", count: counts.overlaps },
-  ];
-  for (const l of lib) {
-    html += navButton({ nav: `lib:${l.id}`, icon: LIB_ICONS[l.id], label: l.label, count: l.count });
-  }
+// A flag only shows when it would match something, so no chip leads to an
+// empty list. Changed also needs a lockfile to mean anything.
+function flagAvailable(id) {
+  if (id === "changed" && !data.lock) return false;
+  return model.counts[id] > 0;
+}
 
-  html += `<div class="nav-heading ${C.navHeading}">Tools</div>`;
+function renderFilters() {
+  const { counts } = model;
+  // Drop a filter whose chip has disappeared (files changed on disk).
+  if (state.tool && !counts.tools.get(state.tool)) state.tool = null;
+  if (state.flag && !flagAvailable(state.flag)) state.flag = null;
+
+  let html = chipButton({ filter: "all", label: "All", count: counts.all });
   for (const t of TOOLS) {
     const count = counts.tools.get(t.id) ?? 0;
-    if (!count && t.id === "shared") continue;
-    html += navButton({ nav: `tool:${t.id}`, icon: TOOL_ICONS[t.id], label: t.label, count });
+    if (count) html += chipButton({ filter: `tool:${t.id}`, icon: TOOL_ICONS[t.id], label: t.label, count });
   }
-
-  html += `<div class="nav-heading ${C.navHeading}">Collections</div>`;
-  for (const r of data.roots.filter((x) => x.exists && (counts.roots.get(x.dir) ?? 0) > 0)) {
-    const short = r.dir.replace(data.cwd, "·").replace(/^\/(home|Users)\/[^/]+/, "~");
-    html += navButton({ nav: `root:${r.dir}`, icon: TOOL_ICONS[r.tool] ?? LIB_ICONS.all, label: short, count: counts.roots.get(r.dir) });
+  const flags = FLAGS.filter((f) => flagAvailable(f.id));
+  if (flags.length) html += `<div class="tb-sep ${cx(styles.tbSep)}"></div>`;
+  for (const f of flags) {
+    html += chipButton({ filter: `flag:${f.id}`, icon: FLAG_ICONS[f.id], label: f.label, count: counts[f.id], title: f.title });
   }
-
-  html += `<div class="nav-heading ${C.navHeading}">Sources</div>`;
-  for (const sc of SCOPES) {
-    html += navButton({ nav: `scope:${sc.id}`, icon: LIB_ICONS.active, label: sc.label, count: counts.scopes.get(sc.id) ?? 0 });
-  }
-
-  $("#sidenav").innerHTML = html;
-  syncSidebar();
+  $("#filters").innerHTML = html;
+  syncFilters();
 }
 
-function syncSidebar() {
-  for (const el of document.querySelectorAll("#sidenav .nav-item")) {
-    const [kind, ...restParts] = el.dataset.nav.split(":");
-    const id = restParts.join(":");
-    let active = false;
-    if (kind === "lib") active = state.library === id && !state.tool && !state.scope && !state.collection;
-    else if (kind === "tool") active = state.tool === id;
-    else if (kind === "root") active = state.collection === id;
-    else if (kind === "scope") active = state.scope === id;
-    el.className = "nav-item " + (active ? C.navItemActive : C.navItem);
+function syncFilters() {
+  for (const el of document.querySelectorAll("#filters .filter-chip")) {
+    const [kind, id] = el.dataset.filter.split(":");
+    const active =
+      kind === "all" ? !state.tool && !state.flag
+      : kind === "tool" ? state.tool === id
+      : state.flag === id;
+    el.className = "filter-chip " + (active ? C.chipActive : C.chip);
+    el.setAttribute("aria-pressed", String(active));
   }
 }
 
-$("#sidenav").addEventListener("click", (e) => {
-  const item = e.target.closest(".nav-item");
-  if (!item) return;
-  const [kind, ...restParts] = item.dataset.nav.split(":");
-  const id = restParts.join(":");
+$("#filters").addEventListener("click", (e) => {
+  const chip = e.target.closest(".filter-chip");
+  if (!chip) return;
+  const [kind, id] = chip.dataset.filter.split(":");
   const list = { view: "grid", groupKey: null };
-  if (kind === "lib") navigate({ ...list, library: id, tool: null, scope: null, collection: null });
-  else if (kind === "tool") navigate({ ...list, library: "all", tool: id, scope: null, collection: null });
-  else if (kind === "root") navigate({ ...list, library: "all", tool: null, scope: null, collection: id });
-  else if (kind === "scope") navigate({ ...list, library: "all", tool: null, scope: id, collection: null });
+  if (kind === "all") navigate({ ...list, tool: null, flag: null });
+  else if (kind === "tool") navigate({ ...list, tool: state.tool === id ? null : id });
+  else navigate({ ...list, flag: state.flag === id ? null : id });
 });
 
 function toolLabel(id) { return TOOLS.find((t) => t.id === id)?.label ?? id; }
@@ -373,7 +342,7 @@ function buildRowsCache() {
       `<span class="r-desc ${C.rDesc}">${esc(rep.description || "—")}</span>` +
       `<span class="r-badges ${C.rBadges}">${badgesHtml(g)}</span>` +
       `<span class="r-tool ${C.rTool}"><svg class="${C.rToolIcon}" viewBox="0 0 16 16" width="13" height="13"><use href="#ti-${esc(rep.tool)}"/></svg><span></span></span>` +
-      `<span class="r-tok ${C.rTok}">~${rep.tokens}</span></div>`;
+      `<span class="r-use ${C.rUse}"></span></div>`;
   }
   const wrapEl = document.createElement("div");
   wrapEl.innerHTML =
@@ -407,25 +376,35 @@ function renderRows() {
       : g.tools.map(toolLabel).join(" · ");
     const cellEl = el.querySelector(".r-tool span");
     if (cellEl.textContent !== cell) cellEl.textContent = cell;
+    syncUseCell(el.querySelector(".r-use"), g.usage);
   }
 
   headEl.textContent = `${groups.length} Skill${groups.length === 1 ? "" : "s"}`;
-  subEl.textContent =
-    state.tool ? toolLabel(state.tool)
-    : state.scope ? SCOPES.find((s) => s.id === state.scope).label
-    : state.collection ? "Collection"
-    : state.library === "changed" ? "Changed since lock"
-    : state.library === "overlaps" ? "Overlapping"
-    : "All";
+  subEl.textContent = [
+    state.tool ? toolLabel(state.tool) : "All",
+    state.flag ? FLAGS.find((f) => f.id === state.flag).title : "",
+  ].filter(Boolean).join(" · ");
   emptyEl.hidden = groups.length > 0;
-  if (!groups.length) {
-    emptyEl.innerHTML = `Nothing here. ${
-      state.library === "changed" ? "Run <code>typecase lock</code>, edit a skill, and changes will appear." : "Try clearing filters."
-    }`;
-  }
+  if (!groups.length) emptyEl.textContent = "No skills match these filters. Click All to clear them.";
 
   const content = $("#content");
   if (wrapEl.parentNode !== content) content.replaceChildren(wrapEl);
+}
+
+// "12× · 2d ago": uses in the window, then recency. Dim when unused or
+// when no readable log covers the skill's tools.
+function syncUseCell(el, u) {
+  const [text, title, dim] =
+    !u ? ["", "", true]
+    : !u.tracked ? ["—", "Not tracked: no readable session log for the tools it is installed for", true]
+    : [
+      u.lastAt ? `${u.recent}× · ${agoText(u.lastAt)}` : "never",
+      `${u.recent} uses in ${u.windowDays} days · ${u.total} all time`,
+      u.unused,
+    ];
+  if (el.textContent !== text) el.textContent = text;
+  el.title = title;
+  el.className = "r-use " + (dim ? C.rUseDim : C.rUse);
 }
 
 function openDetail(key) {
@@ -436,7 +415,7 @@ function closeDetail() {
   navigate({ view: "grid", groupKey: null });
 }
 
-const LOCATION_KEYS = ["view", "groupKey", "library", "tool", "scope", "collection"];
+const LOCATION_KEYS = ["view", "groupKey", "tool", "flag"];
 const navHistory = { back: [], forward: [] };
 
 function currentLocation() {
@@ -446,8 +425,8 @@ function currentLocation() {
 
 function showLocation(loc) {
   for (const k of LOCATION_KEYS) state[k] = loc[k];
-  Object.assign(state, { tab: "rendered", showFrontmatter: false, focusIndex: -1 });
-  syncSidebar();
+  Object.assign(state, { tab: "rendered", focusIndex: -1 });
+  syncFilters();
   renderContent();
   $("#content").scrollTop = loc.scrollTop ?? 0;
 }
@@ -490,20 +469,16 @@ function renderDetail() {
   const s = repFor(g);
 
   $("#content").innerHTML = `<div class="detail ${C.detail}">
-    <div class="detail-top ${C.detailTop}">
-      <div class="${C.spacer}"></div>
-      <button class="icon-btn ${state.showFrontmatter ? C.iconBtnActive : C.iconBtn}" data-action="toggle-fm" title="Raw frontmatter">i</button>
-    </div>
     <div class="detail-hero ${C.detailHero}">${esc(s.name)}</div>
     <div class="detail-sub ${C.detailSub}">${esc(s.description || "")}</div>
     <div class="detail-badges ${C.detailBadges}">${badgesHtml(g)}</div>
-    ${state.showFrontmatter ? `<div class="frontmatter-pop ${C.frontmatterPop}">${esc(JSON.stringify(s.frontmatter, null, 2))}</div>` : ""}
     <div id="tab-body"></div>
   </div>`;
   renderTab();
 }
 
 function renderTab() {
+  if (state.tab === "history" && !data.lock) state.tab = "rendered";
   const g = model.byKey.get(state.groupKey);
   const s = repFor(g);
   const body = $("#tab-body");
@@ -541,7 +516,11 @@ function renderTabRendered(body, g, s) {
   const overlapLinks = myOverlaps.map((o) => {
     const other = g.installs.some((inst) => inst.path === o.a.path) ? o.b : o.a;
     const otherGroup = model.groups.find((x) => x.installs.some((inst) => inst.path === other.path));
-    return `<li class="${C.valueLi}"><a class="link-skill ${C.linkSkill}" data-action="goto" data-key="${esc(otherGroup?.key ?? "")}">${esc(other.name)}</a> <span class="${C.monoDim}">(${Math.round(o.score * 100)}% shared vocabulary, ${esc(other.tool)})</span></li>`;
+    const ou = otherGroup?.usage;
+    const versus = ou?.tracked && g.usage?.tracked
+      ? ` · <strong>${ou.recent}</strong> vs <strong>${g.usage.recent}</strong> here, last ${ou.windowDays}d`
+      : "";
+    return `<li class="${C.valueLi}"><a class="link-skill ${C.linkSkill}" data-action="goto" data-key="${esc(otherGroup?.key ?? "")}">${esc(other.name)}</a> <span class="${C.monoDim}">(${Math.round(o.score * 100)}% shared vocabulary, ${esc(other.tool)})</span>${versus}</li>`;
   }).join("");
   const collision = data.duplicates.find((d) => !d.identical && d.name === s.name);
   const dupLine = collision
@@ -561,6 +540,7 @@ function renderTabRendered(body, g, s) {
   const mutedSpan = (t) => `<span class="${C.rowValueMuted}">${t}</span>`;
   body.innerHTML = `
     <div class="rows ${C.rows}">
+      ${row("Usage", usageHtml(g, s))}
       ${row("Triggers", esc(s.triggers) || null)}
       ${whenUse ? row("When to use", esc(whenUse)) : ""}
       ${row("When not to use", s.whenNot ? esc(s.whenNot) : mutedSpan("not declared"))}
@@ -574,6 +554,50 @@ function renderTabRendered(body, g, s) {
     <article class="body-sections md-body ${MARKDOWN_ROOT}"></article>`;
   const article = body.querySelector(".md-body");
   withRaw(article, s, (raw) => { article.innerHTML = renderSkillMarkdown(raw); });
+}
+
+const kTok = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+function usageHtml(g, s) {
+  const u = g.usage;
+  const muted = (t) => `<span class="${C.rowValueMuted}">${t}</span>`;
+  if (!u) return muted("Reading session logs…");
+  if (!u.tracked) {
+    return muted("Not tracked. Typecase reads Claude Code and Codex session logs; Cursor and Grok keep none it can read.");
+  }
+  const li = (html) => `<li class="${C.valueLi}">${html}</li>`;
+  const lines = [];
+  lines.push(li(
+    `<strong>${plural(u.recent, "use")}</strong> in ${u.windowDays} days · ${u.total} all time · ` +
+    (u.lastAt ? `last used ${agoText(u.lastAt)}` : "never used"),
+  ));
+  if (u.total) {
+    const parts = [];
+    if (u.how.agent) parts.push(`the agent ${u.how.agent}×`);
+    if (u.how.typed) parts.push(`you typed <code>/${esc(s.name)}</code> ${u.how.typed}×`);
+    if (u.how.read) parts.push(`read by Codex ${u.how.read}×`);
+    lines.push(li(`Started by ${parts.join(" · ")}`));
+    if (u.how.typed && !u.how.agent && !u.how.read) {
+      lines.push(li(muted("The agent never picks this on its own. Its description may not match how you ask for it.")));
+    }
+  }
+  if (u.hit) {
+    lines.push(li(
+      `Used in ${u.hit.used} of ${plural(u.hit.offered, "session")} that offered it (${Math.round(u.hit.rate * 100)}%) · ` +
+      `~${u.hit.listingTokens} tokens of description in each ≈ ${kTok(u.hit.contextTokens)} so far`,
+    ));
+  }
+  const byTool = Object.entries(u.byLog).map(([log, n]) => `${LOG_LABEL[log]} ${n}`);
+  for (const t of u.untracked) byTool.push(muted(`${esc(toolLabel(t))} not tracked`));
+  if (byTool.length > 1) lines.push(li(`By tool: ${byTool.join(" · ")}`));
+  if (u.edit) {
+    lines.push(li(
+      `Edited ${esc(new Date(u.edit.editedAt).toLocaleDateString())}: ${plural(u.edit.before, "use")} in the ${u.edit.days} days before, ` +
+      `${u.edit.after} in the ${u.edit.days} days after`,
+    ));
+  }
+  return `<ul class="${C.valueList}">${lines.join("")}</ul>`;
 }
 
 function openMarkdownLink(href) {
@@ -663,8 +687,7 @@ $("#content").addEventListener("click", (e) => {
   const action = e.target.closest("[data-action]");
   if (action) {
     const kind = action.dataset.action;
-    if (kind === "toggle-fm") { state.showFrontmatter = !state.showFrontmatter; renderContent(); }
-    else if (kind === "reveal") window.typecase.reveal(action.dataset.path);
+    if (kind === "reveal") window.typecase.reveal(action.dataset.path);
     else if (kind === "editor") window.typecase.openEditor(action.dataset.dir);
     else if (kind === "goto" && action.dataset.key) openDetail(action.dataset.key);
     return;
@@ -686,7 +709,6 @@ installShortcuts({
   scope: () => (!$("#palette-backdrop").hidden ? "palette" : state.view === "detail" ? "detail" : "list"),
   actions: {
     search: () => ($("#palette-backdrop").hidden ? openPalette() : closePalette()),
-    toggleSidebar: () => $("#toggle-sidebar").click(),
     back: goBack,
     forward: goForward,
     nextRow: () => moveFocus(1),
@@ -695,7 +717,7 @@ installShortcuts({
     closeSkill: closeDetail,
     tabRendered: () => setTab("rendered"),
     tabSource: () => setTab("source"),
-    tabHistory: () => setTab("history"),
+    tabHistory: () => (data.lock ? setTab("history") : false),
   },
 });
 
@@ -788,17 +810,10 @@ function setTab(tab) {
   if (state.view === "detail") renderTab();
 }
 
-$("#toggle-sidebar").addEventListener("click", () => {
-  sidebarHidden = !sidebarHidden;
-  $("#sidebar").className = "sidebar " + cx(styles.sidebar, sidebarHidden && styles.sidebarHidden);
-  syncToolbar();
-});
 function setTheme(theme) {
   state.theme = theme;
   applyTheme();
 }
-const THEME_ORDER = ["system", "light", "dark"];
-$("#theme-btn").addEventListener("click", () => setTheme(THEME_ORDER[(THEME_ORDER.indexOf(state.theme) + 1) % THEME_ORDER.length]));
 $("#search-pill").addEventListener("click", openPalette);
 $("#back-btn").addEventListener("click", goBack);
 for (const b of document.querySelectorAll("#segmented button"))
@@ -809,6 +824,7 @@ function renderContent() {
   if (state.view === "detail") renderDetail();
   else renderRows();
   for (const el of document.querySelectorAll("[data-detail-only]")) el.hidden = state.view !== "detail";
+  for (const el of document.querySelectorAll("[data-list-only]")) el.hidden = state.view === "detail";
   const stats = (window.__renderStats ??= { count: 0, lastMs: 0 });
   stats.count++;
   stats.lastMs = performance.now() - t0;
@@ -826,19 +842,40 @@ async function load() {
   model = buildModel();
   rowsCache = null;
   rawCache.clear();
-  renderSidebar();
+  renderFilters();
   renderContent();
   const t2 = performance.now();
   window.__perf = { ipcMs: t1 - t0, firstRenderMs: t2 - t1 };
+  loadUsage();
 }
+
+// Rescans are cheap (unchanged logs are skipped by size and mtime), so
+// refresh when the window regains focus, at most once a minute.
+let usageAt = 0;
+async function loadUsage() {
+  usageAt = Date.now();
+  try {
+    usage = await window.typecase.usage();
+  } catch (e) {
+    console.warn("usage scan failed", e);
+    return;
+  }
+  model = buildModel();
+  const scrollTop = $("#content").scrollTop;
+  renderFilters();
+  renderContent();
+  $("#content").scrollTop = scrollTop;
+}
+window.addEventListener("focus", () => { if (Date.now() - usageAt > 60_000) loadUsage(); });
 
 window.typecase.onSkillsChanged(async () => {
   data = await window.typecase.data();
   model = buildModel();
   rowsCache = null;
   rawCache.clear();
-  renderSidebar();
+  renderFilters();
   renderContent();
+  loadUsage();
 });
 
 applyShellStyles();

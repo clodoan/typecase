@@ -53,6 +53,7 @@ node scripts/typecase.mjs show chip              # read one skill
 node scripts/typecase.mjs lock                   # pin current state
 node scripts/typecase.mjs diff                   # what changed since lock (exit 1 if anything)
 node scripts/typecase.mjs pin chip               # restore a skill from its snapshot
+node scripts/typecase.mjs usage                  # which skills get used, and which never do
 node scripts/typecase.mjs open                   # desktop reader
 ```
 
@@ -150,10 +151,46 @@ on any failure it falls back to the deterministic text.
 `diff --write-changelog` appends dated entries to `TYPECASE.md`, and
 `lock` does the same automatically when it replaces an older lock.
 
+## Usage
+
+`usage` reads the session logs Claude Code and Codex already keep on
+disk and reports, per skill:
+
+- **Uses** in the last 30 days (`--days n`) and all time, and when it was
+  last used. Skills with no uses in the window are listed as candidates to
+  remove.
+- **Hit rate**: how many of the sessions that offered the skill actually
+  used it. Every installed skill's description sits in every session's
+  context, so this comes with the context cost so far (Claude Code only;
+  its logs record what each session was offered).
+- **Who started it**: the agent, or you typing `/name`. A skill only ever
+  typed by hand is one the agent never picks; its description probably
+  doesn't match how you ask.
+- **Per tool**: uses in each tool it is installed for.
+- **Before and after the last edit**: uses in equal windows either side
+  of the SKILL.md's last change.
+- **Overlap winners**: for each overlapping pair, which one gets used.
+
+`usage <skill>` shows one skill in detail; `usage --unused` lists only the
+removal candidates; `--json` for scripting.
+
+| Tool | Log read | Counts as a use |
+| --- | --- | --- |
+| Claude Code | `~/.claude/projects/*/*.jsonl` (`$CLAUDE_CONFIG_DIR`) | a `Skill` tool call, or a typed `/name` |
+| Codex | `~/.codex/sessions/**/*.jsonl` (`$CODEX_HOME`) | a tool call that reads the skill's `SKILL.md` |
+| Cursor, Grok | — | not tracked: shown as "not tracked", never as "unused" |
+
+Neither log format is documented, so this can break when the tools change
+it; unknown records are skipped rather than miscounted. Everything stays
+local. Typecase keeps only skill names, timestamps, session ids and
+working directories, never message text, in
+`~/.cache/typecase/usage.json`. That cache also keeps sessions after the
+agent deletes its own old logs, so usage history outlasts their retention.
+
 ## The desktop app
 
-`typecase open` launches a Mac-first Electron reader (floating sidebar,
-system font, light and dark themes that follow the system,
+`typecase open` launches a Mac-first Electron reader (one full-width
+list with filter chips, system font, light and dark themes that follow the system,
 full keyboard navigation, ⌘K search). The palette is neutral macOS gray —
 `#f5f5f7` canvas with white panels in light, near-black in dark — with a
 single verdigris accent; rubric red is reserved for risky flags. Styling
@@ -165,28 +202,29 @@ changes on disk.
 
 <img src="assets/app-rows-dark.png" alt="Typecase app in dark mode: compact row list" width="100%" />
 
-- **Sidebar** — Library (All, Active, Changed since lock, Overlaps),
-  Tools, Collections (one per skill root), Sources (user / project /
-  plugin scope).
+- **Filters** — the floating toolbar holds the only filters: All, one
+  chip per tool that has skills, then Unused (no uses in 30 days), Changed
+  (since `skills.lock`) and Overlaps. A tool chip and one of those three
+  combine; a chip only appears when it would match something.
 - **Row list** — one compact hairline row per skill: name, one-line
   description, copies (×N) / risky / overlap / changed chips, tool ·
-  scope, token size. Identical installs across tools collapse into one
-  row marked `×N`. Arrow-key navigation. The floating toolbar holds the
-  sidebar toggle, a back chevron and the
-  Rendered / Source / History tabs in the detail view, the theme toggle
-  (system / light / dark), and the ⌘K search pill. ⌘K finds skills and
+  scope, and usage (`12× · 2d ago`, `never`, or `—` when not tracked).
+  Identical installs across tools collapse into one row marked `×N`.
+  Arrow-key navigation. In the detail view the toolbar holds a back
+  chevron and the Rendered / Source / History tabs. ⌘K finds skills and
   also switches theme: type "light", "dark", "system", or "theme".
-- **Detail view** — hairline rows for triggers, when (not) to use, tools
+- **Detail view** — hairline rows for usage (the metrics above),
+  triggers, when (not) to use, tools
   it can call with risky flags, files referenced, every install path
   (Reveal in Finder / Open in Cursor), overlaps, and lock state, followed
   by the skill's full body rendered as Markdown (markdown-it: headings,
   lists, code blocks, tables; raw HTML stays escaped, links open in your
-  browser or editor and never navigate the app); an info
-  button shows raw frontmatter. The toolbar tabs switch
-  **Rendered / Source / History** (keys 1–3) — History shows the locked version,
+  browser or editor and never navigate the app). The toolbar tabs switch
+  **Rendered / Source / History** (keys 1–3); Source shows the raw file,
+  frontmatter included. History appears once a `skills.lock` exists and shows the locked version,
   the since-lock paragraph with a section-level diff, and this skill's
   `TYPECASE.md` entries.
-- **Keyboard** — ⌘K search, ⌘\\ sidebar, ⌘[ / ⌘] back and forward
+- **Keyboard** — ⌘K search, ⌘[ / ⌘] back and forward
   through the skills and filters you visited (scroll position included),
   arrows + ↩ on the list, Esc and 1–3 on a skill. Every shortcut is
   declared in [`app/renderer/src/shortcuts.mjs`](app/renderer/src/shortcuts.mjs);
