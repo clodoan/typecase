@@ -37,6 +37,9 @@
       "preload.cjs",
       "renderer/index.html",
       "renderer/base.css",
+      "renderer/fonts/*.woff2",
+      "renderer/fonts/inter.css",
+      "renderer/fonts/LICENSE.txt",
       "renderer/dist/**"
     ],
     "extraResources": [

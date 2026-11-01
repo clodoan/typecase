@@ -190,7 +190,7 @@ agent deletes its own old logs, so usage history outlasts their retention.
 ## The desktop app
 
 `typecase open` launches a Mac-first Electron reader (floating sidebar,
-system font, light and dark themes that follow the system,
+[Inter](https://rsms.me/inter/) variable font, light and dark themes that follow the system,
 full keyboard navigation, ⌘K search). The palette is neutral macOS gray —
 `#f5f5f7` canvas with white panels in light, near-black in dark — with a
 single verdigris accent; rubric red is reserved for risky flags. Styling
@@ -236,6 +236,13 @@ changes on disk.
 
 <img src="assets/app-history-light.png" alt="History tab showing a real since-lock diff of the frontend-design skill" width="100%" />
 <img src="assets/app-search-light.png" alt="Command-K fuzzy search palette" width="100%" />
+
+**Fonts.** The app ships Inter 4.1, from the official release, subset for
+what the app draws: [`app/renderer/fonts/README.md`](app/renderer/fonts/README.md)
+has the sizes, coverage, and how to regenerate them with
+[`app/build/fonts/subset-inter.py`](app/build/fonts/subset-inter.py) (run
+by hand, output committed; `app/tests/fonts-manifest.mjs` says when).
+Code stays in the system monospace font.
 
 Run it in development:
 

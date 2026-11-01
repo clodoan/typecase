@@ -1,7 +1,9 @@
 import * as stylex from "@stylexjs/stylex";
 
 export const vars = stylex.defineVars({
-  font: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif',
+  // Inter ships with the app (renderer/fonts, from app/build/fonts/subset-inter.py);
+  // the system stack after it is unchanged.
+  font: 'InterVariable, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif',
   mono: '"SF Mono", ui-monospace, Menlo, Consolas, monospace',
   /* Concentric corners: each radius is its container's radius minus the
      4px inset between them, starting from the native macOS 26 window

@@ -85,6 +85,22 @@ test("row list renders every fixture skill with count and badges", async () => {
   await expect(page.locator(".skill-row", { hasText: "alpha-review" }).locator(".badge.changed")).toBeVisible();
 });
 
+test("Inter loads from the bundled subsets, core only on a plain view", async () => {
+  const faces = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return [...document.fonts].map((f) => ({ family: f.family.replaceAll('"', ""), style: f.style, range: f.unicodeRange, status: f.status }));
+  });
+  const inter = faces.filter((f) => f.family === "InterVariable");
+  expect(inter).toHaveLength(4);
+  // Fixture text is plain ASCII with no italics: only the roman core is in
+  // use (the italic core's bytes are preloaded, its face activates on first
+  // italic text), and neither extended face is ever fetched.
+  const isCore = (f) => f.range.startsWith("U+20-7E");
+  expect(inter.filter((f) => f.status === "loaded").map((f) => [f.style, isCore(f)])).toEqual([["normal", true]]);
+  expect(inter.filter((f) => !isCore(f)).map((f) => f.status)).toEqual(["unloaded", "unloaded"]);
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/^InterVariable,/);
+});
+
 test("search palette finds and opens a skill", async () => {
   await page.keyboard.press("ControlOrMeta+KeyK");
   await expect(page.locator(".palette")).toBeVisible();
